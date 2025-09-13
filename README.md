@@ -29,7 +29,7 @@ Built with performance and maintainability in mind, Athena uses intelligent defa
 # Install from source
 git clone https://github.com/your-org/athena.git
 cd athena
-cargo install --path . --force
+cargo install --path .
 
 # Verify installation
 athena --version
@@ -101,7 +101,7 @@ athena init go my-service --framework gin --with-mongodb
 ```bash
 git clone https://github.com/your-org/athena.git
 cd athena
-cargo install --path . --force
+cargo install --path .
 ```
 
 ### Verify Installation
