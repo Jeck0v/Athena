@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🏛️ Athena - Production-Ready DevOps Toolkit
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
@@ -578,10 +577,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ using Rust | Production-ready DevOps made simple**
-=======
-### Projet personnel, qui me permet plusieurs chose:
-- Création Boilerplate (FastAPI/Flask/Go)
-- Création Dockercompose optimisé et facilement
-- Création de dockerfile et optimisation simple pour prod ready
-- Ajouts d'outils annexe
->>>>>>> 8bcde51403f2261b00b39f65ed1493c706e3ee34
