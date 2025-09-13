@@ -1,0 +1,88 @@
+DEPLOYMENT-ID FULLSTACK_DEV
+VERSION-ID 1.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME dev_network
+
+SERVICES SECTION
+
+SERVICE frontend
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE {{REACT_APP_API_URL}}
+ENV-VARIABLE {{REACT_APP_WS_URL}}
+ENV-VARIABLE {{NODE_ENV}}
+COMMAND "npm run dev"
+VOLUME-MAPPING "./frontend/src" TO "/app/src" (rw)
+VOLUME-MAPPING "./frontend/public" TO "/app/public" (rw)
+DEPENDS-ON backend
+HEALTH-CHECK "curl -f http://localhost:3000 || exit 1"
+RESTART-POLICY unless-stopped
+END SERVICE
+
+SERVICE backend
+PORT-MAPPING 8000 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{DEBUG}}
+ENV-VARIABLE {{SECRET_KEY}}
+ENV-VARIABLE {{CORS_ORIGINS}}
+COMMAND "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug"
+VOLUME-MAPPING "./backend/app" TO "/app/app" (rw)
+VOLUME-MAPPING "./backend/tests" TO "/app/tests" (rw)
+DEPENDS-ON database
+DEPENDS-ON redis
+HEALTH-CHECK "curl -f http://localhost:8000/health || exit 1"
+RESTART-POLICY unless-stopped
+END SERVICE
+
+SERVICE websocket
+PORT-MAPPING 8001 TO 8001
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{JWT_SECRET}}
+COMMAND "python -m app.websocket --host 0.0.0.0 --port 8001"
+VOLUME-MAPPING "./backend/app" TO "/app/app" (rw)
+DEPENDS-ON redis
+HEALTH-CHECK "curl -f http://localhost:8001/ws-health || exit 1"
+RESTART-POLICY unless-stopped
+END SERVICE
+
+SERVICE database
+IMAGE-ID postgres:15
+PORT-MAPPING 5432 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./data/postgres" TO "/var/lib/postgresql/data"
+VOLUME-MAPPING "./database/init.sql" TO "/docker-entrypoint-initdb.d/init.sql" (ro)
+RESTART-POLICY always
+END SERVICE
+
+SERVICE redis
+IMAGE-ID redis:7-alpine
+PORT-MAPPING 6379 TO 6379
+VOLUME-MAPPING "./data/redis" TO "/data" (rw)
+COMMAND "redis-server --appendonly yes"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE mailcatcher
+IMAGE-ID schickling/mailcatcher
+PORT-MAPPING 1025 TO 1025
+PORT-MAPPING 1080 TO 1080
+RESTART-POLICY unless-stopped
+END SERVICE
+
+SERVICE adminer
+IMAGE-ID adminer:latest
+PORT-MAPPING 8080 TO 8080
+DEPENDS-ON database
+RESTART-POLICY unless-stopped
+END SERVICE
+
+SERVICE docs
+PORT-MAPPING 8002 TO 8000
+COMMAND "mkdocs serve --dev-addr 0.0.0.0:8000"
+VOLUME-MAPPING "./docs" TO "/docs" (rw)
+VOLUME-MAPPING "./mkdocs.yml" TO "/mkdocs.yml" (ro)
+RESTART-POLICY unless-stopped
+END SERVICE

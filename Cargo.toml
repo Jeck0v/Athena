@@ -1,0 +1,49 @@
+[package]
+name = "athena"
+version = "0.1.0"
+edition = "2021"
+authors = ["Athena Team"]
+description = "A powerful CLI tool for DSL-based Docker Compose generation and boilerplate creation"
+license = "MIT"
+repository = "https://github.com/your-org/athena"
+keywords = ["cli", "docker", "compose", "devops", "boilerplate"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "athena"
+path = "src/main.rs"
+
+[dependencies]
+# CLI framework
+clap = { version = "4.4", features = ["derive", "color"] }
+
+# Parsing
+pest = "2.7"
+pest_derive = "2.7"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Utilities
+uuid = { version = "1.5", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Template and file operations (for boilerplate generation)
+tempfile = "3.8"
+
+[dev-dependencies]
+# Testing
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

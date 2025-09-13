@@ -1,0 +1,177 @@
+DEPLOYMENT-ID PRODUCTION_APP
+VERSION-ID 2.1.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME production_network
+
+SERVICES SECTION
+
+SERVICE load_balancer
+IMAGE-ID nginx:alpine
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+VOLUME-MAPPING "./nginx/nginx.conf" TO "/etc/nginx/nginx.conf" (ro)
+VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
+VOLUME-MAPPING "./ssl/certs" TO "/etc/ssl/certs" (ro)
+VOLUME-MAPPING "./ssl/private" TO "/etc/ssl/private" (ro)
+DEPENDS-ON api_server_1
+DEPENDS-ON api_server_2
+HEALTH-CHECK "curl -f http://localhost/health || exit 1"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE api_server_1
+PORT-MAPPING 8001 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{SECRET_KEY}}
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{SENTRY_DSN}}
+DEPENDS-ON database
+DEPENDS-ON redis
+DEPENDS-ON message_queue
+HEALTH-CHECK "curl -f http://localhost:8000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+END SERVICE
+
+SERVICE api_server_2
+PORT-MAPPING 8002 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{SECRET_KEY}}
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{SENTRY_DSN}}
+DEPENDS-ON database
+DEPENDS-ON redis
+DEPENDS-ON message_queue
+HEALTH-CHECK "curl -f http://localhost:8000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+END SERVICE
+
+SERVICE worker_service
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{QUEUE_URL}}
+ENV-VARIABLE {{EMAIL_SERVICE_KEY}}
+COMMAND "celery -A app.celery worker --loglevel=info --concurrency=4"
+DEPENDS-ON database
+DEPENDS-ON redis
+DEPENDS-ON message_queue
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE scheduler
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{QUEUE_URL}}
+COMMAND "celery -A app.celery beat --loglevel=info"
+DEPENDS-ON database
+DEPENDS-ON redis
+DEPENDS-ON message_queue
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+END SERVICE
+
+SERVICE database_primary
+IMAGE-ID postgres:15
+PORT-MAPPING 5432 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+ENV-VARIABLE {{POSTGRES_REPLICATION_USER}}
+ENV-VARIABLE {{POSTGRES_REPLICATION_PASSWORD}}
+VOLUME-MAPPING "./data/postgres-primary" TO "/var/lib/postgresql/data"
+VOLUME-MAPPING "./postgres/postgresql.conf" TO "/etc/postgresql/postgresql.conf" (ro)
+VOLUME-MAPPING "./postgres/pg_hba.conf" TO "/etc/postgresql/pg_hba.conf" (ro)
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "2.0" MEMORY "2048M"
+END SERVICE
+
+SERVICE database_replica
+IMAGE-ID postgres:15
+PORT-MAPPING 5433 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+ENV-VARIABLE {{PGUSER}}
+VOLUME-MAPPING "./data/postgres-replica" TO "/var/lib/postgresql/data"
+DEPENDS-ON database_primary
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+END SERVICE
+
+SERVICE redis
+IMAGE-ID redis:7-alpine
+PORT-MAPPING 6379 TO 6379
+VOLUME-MAPPING "./data/redis" TO "/data" (rw)
+VOLUME-MAPPING "./redis/redis.conf" TO "/usr/local/etc/redis/redis.conf" (ro)
+COMMAND "redis-server /usr/local/etc/redis/redis.conf"
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE message_queue
+IMAGE-ID rabbitmq:3-management
+PORT-MAPPING 5672 TO 5672
+PORT-MAPPING 15672 TO 15672
+ENV-VARIABLE {{RABBITMQ_DEFAULT_USER}}
+ENV-VARIABLE {{RABBITMQ_DEFAULT_PASS}}
+ENV-VARIABLE {{RABBITMQ_ERLANG_COOKIE}}
+VOLUME-MAPPING "./data/rabbitmq" TO "/var/lib/rabbitmq"
+VOLUME-MAPPING "./rabbitmq/rabbitmq.conf" TO "/etc/rabbitmq/rabbitmq.conf" (ro)
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE monitoring
+IMAGE-ID prom/prometheus:latest
+PORT-MAPPING 9090 TO 9090
+VOLUME-MAPPING "./monitoring/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
+VOLUME-MAPPING "./monitoring/rules" TO "/etc/prometheus/rules" (ro)
+VOLUME-MAPPING "./data/prometheus" TO "/prometheus"
+DEPENDS-ON api_server_1
+DEPENDS-ON api_server_2
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE grafana
+IMAGE-ID grafana/grafana:latest
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE {{GF_SECURITY_ADMIN_PASSWORD}}
+ENV-VARIABLE {{GF_INSTALL_PLUGINS}}
+VOLUME-MAPPING "./monitoring/grafana/dashboards" TO "/var/lib/grafana/dashboards" (ro)
+VOLUME-MAPPING "./monitoring/grafana/provisioning" TO "/etc/grafana/provisioning" (ro)
+VOLUME-MAPPING "./data/grafana" TO "/var/lib/grafana"
+DEPENDS-ON monitoring
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
+END SERVICE
+
+SERVICE log_aggregator
+IMAGE-ID fluent/fluentd:latest
+PORT-MAPPING 24224 TO 24224
+VOLUME-MAPPING "./logging/fluentd.conf" TO "/fluentd/etc/fluentd.conf" (ro)
+VOLUME-MAPPING "./data/logs" TO "/var/log/fluentd"
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+END SERVICE
+
+SERVICE backup_service
+IMAGE-ID postgres:15
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+ENV-VARIABLE {{BACKUP_S3_BUCKET}}
+ENV-VARIABLE {{AWS_ACCESS_KEY_ID}}
+ENV-VARIABLE {{AWS_SECRET_ACCESS_KEY}}
+COMMAND "sh /backup-script.sh"
+VOLUME-MAPPING "./scripts/backup-script.sh" TO "/backup-script.sh" (ro)
+VOLUME-MAPPING "./data/backups" TO "/backups"
+DEPENDS-ON database_primary
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+END SERVICE

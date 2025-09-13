@@ -1,0 +1,28 @@
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# IA
+AGENT.md
+CALUDE.md
+.claude
+
+# Rust / Cargo
+/target
+/**/*.rs.bk
+
+# Docker
+*.pid
+*.seed
+*.log
+docker-compose.override.yml
+
+# OS files
+.DS_Store
+Thumbs.db

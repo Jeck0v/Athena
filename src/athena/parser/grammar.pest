@@ -1,0 +1,60 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
+
+athena_file = { SOI ~ deployment_section? ~ environment_section? ~ services_section ~ EOI }
+
+// Deployment section
+deployment_section = { deployment_id ~ version_id? }
+deployment_id = { "DEPLOYMENT-ID" ~ identifier }
+version_id = { "VERSION-ID" ~ version_string }
+
+// Environment section  
+environment_section = { "ENVIRONMENT" ~ "SECTION" ~ environment_item* }
+environment_item = { network_name | volume_def | secret_def }
+network_name = { "NETWORK-NAME" ~ identifier }
+volume_def = { "VOLUME" ~ identifier ~ volume_options? }
+secret_def = { "SECRET" ~ identifier ~ string_value }
+
+// Services section
+services_section = { "SERVICES" ~ "SECTION" ~ service* }
+
+service = { "SERVICE" ~ service_name ~ service_items ~ "END" ~ "SERVICE" }
+service_name = { identifier }
+
+service_items = { service_item* }
+service_item = { 
+    image_id | 
+    port_mapping | 
+    env_variable | 
+    command_line | 
+    volume_mapping |
+    depends_on |
+    health_check |
+    restart_policy |
+    resource_limits
+}
+
+// Service directives
+image_id = { "IMAGE-ID" ~ string_value }
+port_mapping = { "PORT-MAPPING" ~ number ~ "TO" ~ number ~ port_protocol? }
+env_variable = { "ENV-VARIABLE" ~ (template_var | string_value) }
+command_line = { "COMMAND" ~ string_value }
+volume_mapping = { "VOLUME-MAPPING" ~ string_value ~ "TO" ~ string_value ~ volume_options? }
+depends_on = { "DEPENDS-ON" ~ identifier }
+health_check = { "HEALTH-CHECK" ~ string_value }
+restart_policy = { "RESTART-POLICY" ~ restart_value }
+resource_limits = { "RESOURCE-LIMITS" ~ "CPU" ~ string_value ~ "MEMORY" ~ string_value }
+
+// Base types
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+string_value = @{ 
+    ("\"" ~ (!("\"") ~ ANY)* ~ "\"") | 
+    (!(WHITESPACE | "END" | "SERVICE" | "TO" | "CPU" | "MEMORY") ~ ANY)+
+}
+template_var = @{ "{{" ~ identifier ~ "}}" }
+number = @{ ASCII_DIGIT+ }
+version_string = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+port_protocol = { "(" ~ ("tcp" | "udp") ~ ")" }
+volume_options = { "(" ~ volume_option ~ ("," ~ volume_option)* ~ ")" }
+volume_option = { "ro" | "rw" | "z" | "Z" }
+restart_value = { "always" | "unless-stopped" | "on-failure" | "no" }
