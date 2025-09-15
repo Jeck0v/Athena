@@ -7,8 +7,6 @@ use super::defaults::{DefaultsEngine, EnhancedDockerService};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerCompose {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
     services: HashMap<String, EnhancedDockerService>,
     #[serde(skip_serializing_if = "Option::is_none")]
     networks: Option<HashMap<String, DockerNetwork>>,
@@ -62,7 +60,6 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     let network_name = athena_file.get_network_name();
     
     let mut compose = DockerCompose {
-        version: None, // Version field is obsolete in Docker Compose 2025+
         name: Some(project_name.clone()),
         services: HashMap::new(),
         networks: None,
@@ -327,7 +324,7 @@ mod tests {
         assert!(result.is_ok());
         
         let yaml = result.unwrap();
-        assert!(yaml.contains("version: '3.8'"));
+        assert!(!yaml.contains("version:"));
         assert!(yaml.contains("backend:"));
         assert!(yaml.contains("image: python:3.11-slim"));
         assert!(yaml.contains("8000:8000"));
