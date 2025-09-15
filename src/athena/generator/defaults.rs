@@ -423,7 +423,7 @@ mod tests {
             "test_project"
         );
         
-        assert_eq!(enhanced.image, "python:3.11-slim");
+        assert_eq!(enhanced.image, Some("python:3.11-slim".to_string()));
         assert_eq!(enhanced.restart, "unless-stopped");
         assert_eq!(enhanced.networks, vec!["test_network"]);
         assert!(enhanced.labels.is_some());
