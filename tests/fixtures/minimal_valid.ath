@@ -1,0 +1,8 @@
+DEPLOYMENT-ID MINIMAL_TEST
+
+SERVICES SECTION
+
+SERVICE minimal_service
+IMAGE-ID alpine:latest
+COMMAND "echo 'Hello World'"
+END SERVICE

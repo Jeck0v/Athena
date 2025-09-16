@@ -1,0 +1,34 @@
+DEPLOYMENT-ID CIRCULAR_DEPS_TEST
+VERSION-ID 1.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME circular_deps_network
+
+SERVICES SECTION
+
+SERVICE service_a
+IMAGE-ID alpine:latest
+PORT-MAPPING 8001 TO 8001
+DEPENDS-ON service_b
+COMMAND "echo 'Service A'"
+END SERVICE
+
+SERVICE service_b
+IMAGE-ID alpine:latest
+PORT-MAPPING 8002 TO 8002
+DEPENDS-ON service_c
+COMMAND "echo 'Service B'"
+END SERVICE
+
+SERVICE service_c
+IMAGE-ID alpine:latest
+PORT-MAPPING 8003 TO 8003
+DEPENDS-ON service_a
+COMMAND "echo 'Service C'"
+END SERVICE
+
+SERVICE standalone
+IMAGE-ID alpine:latest
+PORT-MAPPING 9000 TO 9000
+COMMAND "echo 'Standalone Service'"
+END SERVICE
