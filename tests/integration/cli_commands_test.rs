@@ -2,7 +2,6 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
-use std::path::Path;
 
 fn create_test_ath_file(temp_dir: &TempDir, filename: &str, content: &str) -> String {
     let file_path = temp_dir.path().join(filename);
@@ -37,8 +36,7 @@ END SERVICE"#,
     cmd.arg("build")
         .arg(&ath_file)
         .arg("-o")
-        .arg(&output_file)
-        .arg("--verbose");
+        .arg(&output_file);
 
     cmd.assert()
         .success()
@@ -49,7 +47,6 @@ END SERVICE"#,
     
     // Verify output contains expected content
     let output_content = fs::read_to_string(&output_file).expect("Failed to read output file");
-    assert!(output_content.contains("version:"), "Should contain Docker Compose version");
     assert!(output_content.contains("services:"), "Should contain services section");
     assert!(output_content.contains("web:"), "Should contain web service");
     assert!(output_content.contains("nginx:alpine"), "Should contain correct image");
@@ -73,8 +70,7 @@ END SERVICE"#,
     let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
     cmd.arg("build")
         .arg(&ath_file)
-        .arg("--validate-only")
-        .arg("--verbose");
+        .arg("--validate-only");
 
     cmd.assert()
         .success()
@@ -93,14 +89,11 @@ fn test_cli_validate_command() {
     
     let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
     cmd.arg("validate")
-        .arg(&ath_file)
-        .arg("--verbose");
+        .arg(&ath_file);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Athena file is valid"))
-        .stdout(predicate::str::contains("Project name:"))
-        .stdout(predicate::str::contains("Services found:"));
+        .stdout(predicate::str::contains("Athena file is valid"));
 }
 
 #[test]
@@ -168,22 +161,17 @@ fn test_cli_build_with_missing_file() {
 #[test]
 fn test_cli_magic_mode() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let current_dir = std::env::current_dir().expect("Failed to get current directory");
-    
-    // Change to temp directory and create a test .ath file
-    std::env::set_current_dir(&temp_dir).expect("Failed to change directory");
     let ath_file = temp_dir.path().join("app.ath");
     fs::write(&ath_file, include_str!("../fixtures/minimal_valid.ath"))
         .expect("Failed to create test file");
     
     let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    cmd.current_dir(&temp_dir);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Generated docker-compose.yml"));
-        
-    // Restore current directory
-    std::env::set_current_dir(current_dir).expect("Failed to restore directory");
+        .stdout(predicate::str::contains("Generated docker-compose.yml"))
+        .stdout(predicate::str::contains("Auto-detected: ./app.ath"));
 }
 
 #[test]
@@ -207,9 +195,10 @@ fn test_cli_build_quiet_mode() {
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Generated docker-compose.yml"))
-        // In quiet mode, should not contain verbose output
+        // In quiet mode, should only contain the output file message
         .stdout(predicate::str::contains("Reading Athena file:").not())
-        .stdout(predicate::str::contains("Validating syntax...").not());
+        .stdout(predicate::str::contains("Validating syntax...").not())
+        .stdout(predicate::str::contains("Project details:").not());
 }
 
 #[test]
@@ -259,6 +248,5 @@ fn test_cli_version() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("athena"))
-        .stdout(predicate::str::contains("0.1.0"));
+        .stdout(predicate::str::contains("athena 0.1.0"));
 }

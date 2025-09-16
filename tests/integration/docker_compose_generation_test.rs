@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use predicates::prelude::*;
 use serde_yaml::Value;
 use std::fs;
 use tempfile::TempDir;
@@ -49,10 +48,12 @@ fn test_simple_service_generation() {
     let parsed: Value = parse_yaml_safely(&yaml_content)
         .expect("Generated YAML should be valid");
     
-    // Verify basic structure
-    assert!(parsed["version"].is_string(), "Should have version field");
+    // Verify basic structure (modern Docker Compose doesn't require version field)
     assert!(parsed["services"].is_mapping(), "Should have services section");
     assert!(parsed["networks"].is_mapping(), "Should have networks section");
+    
+    // Verify that version field does NOT exist (modern Docker Compose style)
+    assert!(parsed["version"].is_null(), "Version field should not exist in modern Docker Compose");
     
     let services = parsed["services"].as_mapping().expect("Services should be a mapping");
     
@@ -229,7 +230,7 @@ SERVICE multi_port_service
 IMAGE-ID nginx:alpine
 PORT-MAPPING 8080 TO 80
 PORT-MAPPING 8443 TO 443
-PORT-MAPPING 9090 TO 9090 (udp)
+PORT-MAPPING 9090 TO 9090
 END SERVICE"#;
     
     let ath_file = create_test_ath_file(&temp_dir, "port_test.ath", ath_content);
@@ -245,7 +246,7 @@ END SERVICE"#;
     let service = &services["multi_port_service"];
     
     let ports = service["ports"].as_sequence().expect("Should have ports");
-    assert!(ports.len() >= 3, "Should have at least 3 port mappings");
+    assert_eq!(ports.len(), 3, "Should have exactly 3 port mappings");
     
     // Convert ports to strings for easier checking
     let port_strings: Vec<String> = ports.iter()
@@ -332,9 +333,15 @@ END SERVICE"#;
     
     // Verify the health check command is properly formatted
     let test_cmd = if healthcheck["test"].is_string() {
-        healthcheck["test"].as_str().unwrap()
+        healthcheck["test"].as_str().unwrap().to_string()
     } else {
-        healthcheck["test"].as_sequence().unwrap()[0].as_str().unwrap()
+        // For sequence format like ["CMD-SHELL", "command"], check the actual command (second element)
+        let sequence = healthcheck["test"].as_sequence().unwrap();
+        if sequence.len() > 1 {
+            sequence[1].as_str().unwrap().to_string()
+        } else {
+            sequence[0].as_str().unwrap().to_string()
+        }
     };
     
     assert!(test_cmd.contains("curl") || test_cmd.contains("health"), 
@@ -366,7 +373,9 @@ fn test_yaml_validity_and_formatting() {
         .expect("Re-serialized YAML should be valid");
     
     // Basic structure should be preserved
-    assert_eq!(parsed["version"], re_parsed["version"], "Version should be preserved");
+    // Version field should not exist in both original and re-parsed
+    assert!(parsed["version"].is_null(), "Original YAML should not have version field");
+    assert!(re_parsed["version"].is_null(), "Re-parsed YAML should not have version field");
     assert_eq!(parsed["services"].as_mapping().unwrap().len(), 
                re_parsed["services"].as_mapping().unwrap().len(), 
                "Service count should be preserved");

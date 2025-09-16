@@ -6,7 +6,7 @@ This directory contains comprehensive integration tests for the Athena CLI tool.
 
 Our tests focus on **functionality over format**:
 - **Structural tests** verify logic and behavior
-- **Functional tests** check that features work correctly  
+- **Functional tests** check that features work correctly
 - **Lightweight approach** easy to maintain and fast to run
 - **No heavy snapshot tests** that break on cosmetic changes
 
@@ -18,7 +18,12 @@ tests/
 │   ├── cli_commands_test.rs             # Test all CLI commands
 │   ├── docker_compose_generation_test.rs # Full generation test
 │   ├── error_handling_test.rs           # Error case testing
-│   ├── boilerplate_generation_test.rs   # Init command tests
+│   ├── boilerplate/                     # Modular boilerplate tests
+│   │   ├── mod.rs                       # Common utilities and shared functions
+│   │   ├── fastapi_tests.rs             # FastAPI project generation tests
+│   │   ├── flask_tests.rs               # Flask project generation tests
+│   │   ├── go_tests.rs                  # Go project generation tests
+│   │   └── common_tests.rs              # Common init command tests
 │   └── structural/                      # Organized structural tests
 │       ├── mod.rs                       # Common utilities and module declarations
 │       ├── basic_structure.rs           # Basic YAML structure validation
@@ -74,10 +79,16 @@ cargo test --test integration_tests docker_compose_generation_test
 cargo test --test integration_tests error_handling_test
 
 # Boilerplate generation tests
-cargo test --test integration_tests boilerplate_generation_test
+cargo test --test integration_tests boilerplate
 
 # All structural tests (lightweight YAML validation)
 cargo test --test integration_tests structural
+
+# Specific boilerplate test categories
+cargo test --test integration_tests boilerplate::fastapi_tests
+cargo test --test integration_tests boilerplate::flask_tests
+cargo test --test integration_tests boilerplate::go_tests
+cargo test --test integration_tests boilerplate::common_tests
 
 # Specific structural test categories
 cargo test --test integration_tests structural::basic_structure
@@ -125,12 +136,13 @@ cargo test --test integration_tests structural --verbose
 - Tests permission and access errors
 - Validates error message quality
 
-### 4. Boilerplate Generation Tests (`boilerplate_generation_test.rs`)
-- Tests `athena init` commands
-- Tests FastAPI, Flask, and Go project generation
-- Tests database configuration options
-- Tests Docker file generation
-- Tests custom directory options
+### 4. Boilerplate Generation Tests (`boilerplate/`)
+- **Modular organization** by framework for better maintainability
+- **FastAPI tests** (`fastapi_tests.rs`): Basic init, PostgreSQL/MongoDB options, Docker/no-Docker modes
+- **Flask tests** (`flask_tests.rs`): Basic init, MySQL integration
+- **Go tests** (`go_tests.rs`): Gin, Echo, and Fiber framework support
+- **Common tests** (`common_tests.rs`): Error handling, help commands, project validation
+- Tests project structure generation, configuration files, and dependency setup
 
 ### 5. Structural Tests (`structural/`)
 - **Organized by functional categories** for better maintainability
@@ -173,7 +185,7 @@ The integration tests use several lightweight dependencies:
 ### Advantages of Our Approach
 - **Fast execution** - No heavy file comparisons
 - **Easy maintenance** - No snapshot file management
-- **Clear intent** - Tests specific functionality, not formatting  
+- **Clear intent** - Tests specific functionality, not formatting
 - **Robust** - Don't break on cosmetic changes
 - **Focused** - Test what matters: structure and logic
 
@@ -209,7 +221,7 @@ cargo test --test integration_tests structural::basic_structure::test_basic_yaml
 fn test_service_configuration_structure() {
     let parsed = run_athena_build_and_parse(&ath_file);
     let services = parsed["services"].as_mapping().unwrap();
-    
+
     // Test specific functionality
     assert!(services.contains_key("web"), "Should have web service");
     assert_eq!(services["web"]["image"], "nginx:alpine");
@@ -223,33 +235,47 @@ fn test_service_configuration_structure() {
 
 **What we verify:**
 - **YAML structure validity** (services, networks, volumes)
-- **Service configuration** (images, ports, environment variables)  
+- **Service configuration** (images, ports, environment variables)
 - **Relationships** (dependencies, networks)
 - **Logic correctness** (restart policies, health checks)
 - **Docker Compose compliance** (valid modern format)
 
 ### Boilerplate Tests
-Some boilerplate generation tests may fail if the actual implementation is not complete. These tests verify:
-- Project directory creation
-- File structure generation
-- Configuration file content
-- Database-specific setup
+Modular boilerplate tests organized by framework, each verifying:
+- **Project directory creation** and proper file structure
+- **Framework-specific configurations** (dependencies, settings)
+- **Database integration** (PostgreSQL, MongoDB, MySQL setup)
+- **Docker configuration** generation and optional exclusion
+- **Custom directory** and project name handling
+- **Error scenarios** and validation
 
 ### Test Performance & Statistics
 
 **Current test suite:**
-- **Total tests**: 69 integration tests
+- **Total tests**: 67 integration tests
+- **CLI tests**: 13 tests (command parsing, help, validation)
+- **Docker Compose generation**: 9 tests (YAML generation and validation)
+- **Error handling**: 18 tests (comprehensive error scenarios)
+- **Boilerplate generation**: 14 tests (modular by framework)
 - **Structural tests**: 13 tests (organized in 6 categories)
 - **Execution time**: < 1 second for structural tests
 - **Test organization**: Modular structure for easy maintenance
 
 **Test breakdown by category:**
+
+**Structural tests:**
 - `basic_structure.rs`: 2 tests
-- `service_configuration.rs`: 4 tests  
+- `service_configuration.rs`: 4 tests
 - `networking.rs`: 2 tests
 - `policies.rs`: 2 tests
 - `formatting.rs`: 2 tests
 - `complex_scenarios.rs`: 1 test
+
+**Boilerplate tests:**
+- `fastapi_tests.rs`: 6 tests (basic, PostgreSQL, MongoDB, no-Docker, custom directory, help)
+- `flask_tests.rs`: 2 tests (basic, MySQL integration)
+- `go_tests.rs`: 3 tests (Gin, Echo, Fiber frameworks)
+- `common_tests.rs`: 3 tests (error handling, validation, help commands)
 
 ### Coverage Goals
 The test suite aims for >80% coverage on critical code paths:
@@ -259,18 +285,6 @@ The test suite aims for >80% coverage on critical code paths:
 - Error handling and reporting
 - Project initialization
 
-### CI/CD Integration
-To run tests in CI/CD pipelines:
-```bash
-# Run all tests with verbose output
-cargo test --verbose
-
-# Run tests with coverage (requires cargo-tarpaulin)
-cargo tarpaulin --out xml
-
-# Run tests in release mode for performance
-cargo test --release
-```
 
 ## Contributing
 
@@ -290,3 +304,10 @@ For new structural tests, place them in the appropriate category:
 - `policies.rs`: Restart policies and health checks
 - `formatting.rs`: YAML validity and output formatting
 - `complex_scenarios.rs`: Multi-service architecture tests
+
+### Adding Boilerplate Tests
+For new boilerplate tests, place them in the appropriate framework file:
+- `fastapi_tests.rs`: FastAPI-specific features and configurations
+- `flask_tests.rs`: Flask-specific features and database integrations
+- `go_tests.rs`: Go framework-specific tests (Gin, Echo, Fiber)
+- `common_tests.rs`: Cross-framework functionality (validation, help, errors)
