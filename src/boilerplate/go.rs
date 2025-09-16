@@ -7,6 +7,12 @@ use std::path::Path;
 
 pub struct GoGenerator;
 
+impl Default for GoGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GoGenerator {
     pub fn new() -> Self {
         Self
@@ -423,7 +429,7 @@ func VerifyToken(tokenString, jwtSecret, expectedType string) (*Claims, error) {
     }
 
     fn generate_models_files(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
-        let vars = self.get_template_vars(config);
+        let _vars = self.get_template_vars(config);
 
         let models_go = match config.database {
             DatabaseType::MySQL => {
@@ -1421,7 +1427,7 @@ func TestHealth(t *testing.T) {
     }
 
     fn generate_documentation(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
-        let vars = self.get_template_vars(config);
+        let _vars = self.get_template_vars(config);
         let names = ProjectNames::new(&config.name);
 
         let readme = format!(r#"# {project_name}

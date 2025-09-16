@@ -91,7 +91,7 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
 
     // Generate optimized YAML
     let yaml = serde_yaml::to_string(&compose)
-        .map_err(|e| AthenaError::YamlError(e))?;
+        .map_err(AthenaError::YamlError)?;
 
     // Improve formatting for better readability
     let formatted_yaml = improve_yaml_formatting(yaml);

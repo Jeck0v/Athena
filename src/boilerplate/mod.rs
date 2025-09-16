@@ -38,6 +38,7 @@ pub struct ProjectConfig {
     pub directory: String,
     pub database: DatabaseType,
     pub include_docker: bool,
+    #[allow(dead_code)]
     pub framework: Option<GoFramework>,
 }
 
