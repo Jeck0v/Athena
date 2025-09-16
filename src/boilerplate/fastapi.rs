@@ -7,6 +7,12 @@ use std::path::Path;
 
 pub struct FastAPIGenerator;
 
+impl Default for FastAPIGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FastAPIGenerator {
     pub fn new() -> Self {
         Self
@@ -69,11 +75,6 @@ impl FastAPIGenerator {
                 config_content = config_content.replace("{{/if}}", "");
                 config_content = config_content.replace("{{#if mongodb}}", "");
                 config_content = config_content.replace("{{/if}}", "");
-            }
-            DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
-                    "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
-                ));
             }
             DatabaseType::MySQL => {
                 return Err(crate::athena::AthenaError::ValidationError(
@@ -284,7 +285,7 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
     }
 
     fn generate_database_files(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
-        let vars = self.get_template_vars(config);
+        let _vars = self.get_template_vars(config);
 
         write_file(base_path.join("app/database/__init__.py"), "")?;
 
@@ -324,7 +325,7 @@ def get_database():
     """Get database instance"""
     return db.database
 "#;
-                write_file(base_path.join("app/database/connection.py"), &mongodb_connection)?;
+                write_file(base_path.join("app/database/connection.py"), mongodb_connection)?;
             }
             DatabaseType::PostgreSQL => {
                 let postgres_connection = r#"from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -396,7 +397,7 @@ def get_engine():
     """Get database engine"""
     return engine
 "#;
-                write_file(base_path.join("app/database/connection.py"), &postgres_connection)?;
+                write_file(base_path.join("app/database/connection.py"), postgres_connection)?;
             }
             DatabaseType::MySQL => {
                 return Err(crate::athena::AthenaError::ValidationError(
@@ -409,7 +410,7 @@ def get_engine():
     }
 
     fn generate_models_and_services(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
-        let vars = self.get_template_vars(config);
+        let _vars = self.get_template_vars(config);
 
         // Models
         write_file(base_path.join("app/models/__init__.py"), "")?;
@@ -799,13 +800,13 @@ def test_invalid_login():
     )
     assert response.status_code == 401
 "#;
-        write_file(base_path.join("tests/test_auth.py"), &test_auth)?;
+        write_file(base_path.join("tests/test_auth.py"), test_auth)?;
 
         Ok(())
     }
 
     fn generate_documentation(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
-        let vars = self.get_template_vars(config);
+        let _vars = self.get_template_vars(config);
         let names = ProjectNames::new(&config.name);
 
         let readme = format!(r#"# {project_name}

@@ -10,7 +10,7 @@ pub fn auto_detect_ath_file(input: Option<PathBuf>) -> AthenaResult<PathBuf> {
         None => {
             // Search for .ath files in the current directory
             let ath_files: Vec<_> = fs::read_dir(".")
-                .map_err(|e| AthenaError::IoError(e))?
+                .map_err(AthenaError::IoError)?
                 .filter_map(|entry| {
                     let entry = entry.ok()?;
                     let path = entry.path();
@@ -45,7 +45,7 @@ pub fn auto_detect_ath_file(input: Option<PathBuf>) -> AthenaResult<PathBuf> {
 }
 
 /// Determine if we should be in verbose mode (default yes, unless --quiet)
-pub fn should_be_verbose(global_verbose: bool, quiet: bool) -> bool {
+pub fn should_be_verbose(_global_verbose: bool, quiet: bool) -> bool {
     if quiet {
         false
     } else {

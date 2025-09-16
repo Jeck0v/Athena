@@ -52,7 +52,7 @@ fn execute_build(
     }
 
     // Read and parse the input file
-    let content = fs::read_to_string(&input).map_err(|e| AthenaError::IoError(e))?;
+    let content = fs::read_to_string(&input).map_err(AthenaError::IoError)?;
 
     // Automatic validation (always done)
     if verbose {
@@ -84,7 +84,7 @@ fn execute_build(
     let output_path = output.unwrap_or_else(|| "docker-compose.yml".into());
 
     // Write output
-    fs::write(&output_path, &compose_yaml).map_err(|e| AthenaError::IoError(e))?;
+    fs::write(&output_path, &compose_yaml).map_err(AthenaError::IoError)?;
 
     println!(
         "Generated docker-compose.yml at: {}",
@@ -114,7 +114,7 @@ fn execute_init(init_cmd: InitCommands, verbose: bool) -> AthenaResult<()> {
         InitCommands::Fastapi {
             name,
             directory,
-            with_mongodb,
+            with_mongodb: _,
             with_postgresql,
             no_docker,
         } => {
@@ -181,7 +181,7 @@ fn execute_init(init_cmd: InitCommands, verbose: bool) -> AthenaResult<()> {
             name,
             directory,
             framework,
-            with_mongodb,
+            with_mongodb: _,
             with_postgresql,
             no_docker,
         } => {
@@ -227,7 +227,7 @@ fn execute_validate(input: Option<std::path::PathBuf>, verbose: bool) -> AthenaR
         println!("Validating Athena file: {}", input.display());
     }
 
-    let content = fs::read_to_string(&input).map_err(|e| AthenaError::IoError(e))?;
+    let content = fs::read_to_string(&input).map_err(AthenaError::IoError)?;
 
     let athena_file = parse_athena_file(&content)?;
 

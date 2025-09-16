@@ -4,28 +4,37 @@ use crate::athena::parser::ast::*;
 
 /// Default Docker Compose configurations based on service patterns and Docker standards
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ServiceDefaults {
     pub restart_policy: RestartPolicy,
     pub health_check_interval: String,
     pub health_check_timeout: String,
     pub health_check_retries: u32,
     pub health_check_start_period: String,
+    #[allow(dead_code)]
     pub network_mode: NetworkMode,
     pub pull_policy: PullPolicy,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum NetworkMode {
     Bridge,
+    #[allow(dead_code)]
     Host,
+    #[allow(dead_code)]
     None,
+    #[allow(dead_code)]
     Custom(String),
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum PullPolicy {
+    #[allow(dead_code)]
     Always,
     Missing,
+    #[allow(dead_code)]
     Never,
 }
 
