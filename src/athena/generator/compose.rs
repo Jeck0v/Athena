@@ -93,7 +93,10 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     let yaml = serde_yaml::to_string(&compose)
         .map_err(|e| AthenaError::YamlError(e))?;
 
-    Ok(add_enhanced_yaml_comments(yaml, athena_file))
+    // Improve formatting for better readability
+    let formatted_yaml = improve_yaml_formatting(yaml);
+
+    Ok(add_enhanced_yaml_comments(formatted_yaml, athena_file))
 }
 
 /// Create optimized network configuration
@@ -263,6 +266,41 @@ fn has_cycle_iterative(
     Ok(false)
 }
 
+/// Improve YAML formatting for better readability by adding blank lines between services
+fn improve_yaml_formatting(yaml: String) -> String {
+    let lines: Vec<&str> = yaml.lines().collect();
+    let mut formatted_lines = Vec::new();
+    let mut inside_services = false;
+    let mut first_service = true;
+    
+    for line in lines.iter() {
+        // Check if we're in the services section
+        if line.starts_with("services:") {
+            inside_services = true;
+            first_service = true;
+            formatted_lines.push(line.to_string());
+            continue;
+        }
+        
+        // Check if we've left the services section (reached networks, volumes, etc.)
+        if inside_services && !line.starts_with(" ") && !line.trim().is_empty() {
+            inside_services = false;
+        }
+        
+        // Detect service definition: exactly 2 spaces + service name + colon
+        if inside_services && line.starts_with("  ") && !line.starts_with("    ") && line.contains(':') {
+            // This is a service definition (e.g., "  web:", "  app:", "  database:")
+            if !first_service {
+                formatted_lines.push(String::new()); // Add blank line before service
+            }
+            first_service = false;
+        }
+        
+        formatted_lines.push(line.to_string());
+    }
+    
+    formatted_lines.join("\n")
+}
 
 /// Add enhanced YAML comments with metadata and optimization notes
 fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String {

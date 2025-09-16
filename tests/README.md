@@ -2,13 +2,13 @@
 
 This directory contains comprehensive integration tests for the Athena CLI tool.
 
-## 🎯 **Test Philosophy**
+## Test Philosophy
 
 Our tests focus on **functionality over format**:
-- ✅ **Structural tests** verify logic and behavior
-- ✅ **Functional tests** check that features work correctly  
-- ✅ **Lightweight approach** easy to maintain and fast to run
-- ❌ **No heavy snapshot tests** that break on cosmetic changes
+- **Structural tests** verify logic and behavior
+- **Functional tests** check that features work correctly  
+- **Lightweight approach** easy to maintain and fast to run
+- **No heavy snapshot tests** that break on cosmetic changes
 
 ## Test Structure
 
@@ -19,7 +19,14 @@ tests/
 │   ├── docker_compose_generation_test.rs # Full generation test
 │   ├── error_handling_test.rs           # Error case testing
 │   ├── boilerplate_generation_test.rs   # Init command tests
-│   └── structural_tests.rs              # Lightweight YAML structure tests
+│   └── structural/                      # Organized structural tests
+│       ├── mod.rs                       # Common utilities and module declarations
+│       ├── basic_structure.rs           # Basic YAML structure validation
+│       ├── service_configuration.rs     # Service config (env vars, ports, volumes)
+│       ├── networking.rs                # Networks and service dependencies
+│       ├── policies.rs                  # Restart policies and health checks
+│       ├── formatting.rs                # YAML validity and formatting tests
+│       └── complex_scenarios.rs         # Complex microservices scenarios
 ├── fixtures/
 │   ├── valid_simple.ath                # Simple valid .ath file
 │   ├── valid_complex_microservices.ath # Complex microservices setup
@@ -29,6 +36,21 @@ tests/
 ```
 
 ## Running Tests
+
+### Quick Start
+```bash
+# Run all tests
+cargo test
+
+# Run only integration tests
+cargo test --test integration_tests
+
+# Run structural tests (fastest, most common)
+cargo test --test integration_tests structural
+
+# Run with verbose output to see individual test names
+cargo test --test integration_tests structural --verbose
+```
 
 ### Run All Tests
 ```bash
@@ -54,13 +76,28 @@ cargo test --test integration_tests error_handling_test
 # Boilerplate generation tests
 cargo test --test integration_tests boilerplate_generation_test
 
-# Structural tests (lightweight YAML validation)
-cargo test --test integration_tests structural_tests
+# All structural tests (lightweight YAML validation)
+cargo test --test integration_tests structural
+
+# Specific structural test categories
+cargo test --test integration_tests structural::basic_structure
+cargo test --test integration_tests structural::service_configuration
+cargo test --test integration_tests structural::networking
+cargo test --test integration_tests structural::policies
+cargo test --test integration_tests structural::formatting
+cargo test --test integration_tests structural::complex_scenarios
 ```
 
 ### Run Individual Tests
 ```bash
+# Run a specific test function
 cargo test --test integration_tests cli_commands_test::test_cli_help
+
+# Run a specific structural test
+cargo test --test integration_tests structural::basic_structure::test_basic_yaml_structure
+
+# Run with verbose output to see test names
+cargo test --test integration_tests structural --verbose
 ```
 
 ## Test Categories
@@ -95,11 +132,20 @@ cargo test --test integration_tests cli_commands_test::test_cli_help
 - Tests Docker file generation
 - Tests custom directory options
 
-### 5. Structural Tests (`structural_tests.rs`)
+### 5. Structural Tests (`structural/`)
+- **Organized by functional categories** for better maintainability
 - **Lightweight YAML validation** without heavy snapshots
 - Tests **structure and logic** rather than exact formatting
 - **Fast and maintainable** - no snapshot file management
 - Validates **Docker Compose compliance** and **key functionality**
+
+**Test categories:**
+- `basic_structure.rs`: Basic YAML structure and service count validation
+- `service_configuration.rs`: Environment variables, ports, volumes, and service settings
+- `networking.rs`: Network configuration and service dependencies
+- `policies.rs`: Restart policies and health check configurations
+- `formatting.rs`: YAML validity and readable output formatting
+- `complex_scenarios.rs`: Complex microservices architecture tests
 
 ## Test Fixtures
 
@@ -122,32 +168,35 @@ The integration tests use several lightweight dependencies:
 - **`pretty_assertions`**: Better assertion output
 - **`serde_yaml`**: YAML parsing for structural validation
 
-## 💡 **Why Structural Tests?**
+## Why Structural Tests?
 
-### ✅ **Advantages of Our Approach**
-- **🚀 Fast execution** - No heavy file comparisons
-- **🔧 Easy maintenance** - No snapshot file management
-- **📋 Clear intent** - Tests specific functionality, not formatting  
-- **💪 Robust** - Don't break on cosmetic changes
-- **🔍 Focused** - Test what matters: structure and logic
+### Advantages of Our Approach
+- **Fast execution** - No heavy file comparisons
+- **Easy maintenance** - No snapshot file management
+- **Clear intent** - Tests specific functionality, not formatting  
+- **Robust** - Don't break on cosmetic changes
+- **Focused** - Test what matters: structure and logic
 
-### ❌ **Why We Avoid Snapshot Tests**
-- **🐌 Slow and heavy** - Large files to compare
-- **💔 Fragile** - Break on whitespace or comment changes
-- **🔄 High maintenance** - Constant `cargo insta review` cycles
-- **😵 Opaque failures** - Hard to see what actually matters
-- **📁 File bloat** - Many large snapshot files to maintain
+### Why We Avoid Snapshot Tests
+- **Slow and heavy** - Large files to compare
+- **Fragile** - Break on whitespace or comment changes
+- **High maintenance** - Constant `cargo insta review` cycles
+- **Opaque failures** - Hard to see what actually matters
+- **File bloat** - Many large snapshot files to maintain
 
 ## Usage Notes
 
 ### Running Structural Tests
 Our structural tests are designed to be **fast and reliable**:
 ```bash
-# Run all structural tests - should complete in < 5 seconds
-cargo test --test integration_tests structural_tests
+# Run all structural tests - should complete in < 1 second
+cargo test --test integration_tests structural
 
-# Run specific structural test
-cargo test --test integration_tests structural_tests::test_basic_yaml_structure
+# Run specific structural test category
+cargo test --test integration_tests structural::basic_structure
+
+# Run specific structural test function
+cargo test --test integration_tests structural::basic_structure::test_basic_yaml_structure
 ```
 
 ### What Structural Tests Check
@@ -155,7 +204,7 @@ cargo test --test integration_tests structural_tests::test_basic_yaml_structure
 **Example: Instead of comparing entire YAML files, we test specific logic:**
 
 ```rust
-// ✅ Good: Test what matters
+// Good: Test what matters
 #[test]
 fn test_service_configuration_structure() {
     let parsed = run_athena_build_and_parse(&ath_file);
@@ -168,16 +217,16 @@ fn test_service_configuration_structure() {
     assert!(services["web"]["environment"].is_sequence());
 }
 
-// ❌ Avoid: Brittle snapshot comparison
+// Avoid: Brittle snapshot comparison
 // assert_snapshot!("entire_compose_file", yaml_content);
 ```
 
 **What we verify:**
-- 🔍 **YAML structure validity** (version, services, networks)
-- 🔍 **Service configuration** (images, ports, environment)  
-- 🔍 **Relationships** (dependencies, networks)
-- 🔍 **Logic correctness** (restart policies, health checks)
-- 🔍 **Docker Compose compliance** (valid format)
+- **YAML structure validity** (services, networks, volumes)
+- **Service configuration** (images, ports, environment variables)  
+- **Relationships** (dependencies, networks)
+- **Logic correctness** (restart policies, health checks)
+- **Docker Compose compliance** (valid modern format)
 
 ### Boilerplate Tests
 Some boilerplate generation tests may fail if the actual implementation is not complete. These tests verify:
@@ -185,6 +234,22 @@ Some boilerplate generation tests may fail if the actual implementation is not c
 - File structure generation
 - Configuration file content
 - Database-specific setup
+
+### Test Performance & Statistics
+
+**Current test suite:**
+- **Total tests**: 69 integration tests
+- **Structural tests**: 13 tests (organized in 6 categories)
+- **Execution time**: < 1 second for structural tests
+- **Test organization**: Modular structure for easy maintenance
+
+**Test breakdown by category:**
+- `basic_structure.rs`: 2 tests
+- `service_configuration.rs`: 4 tests  
+- `networking.rs`: 2 tests
+- `policies.rs`: 2 tests
+- `formatting.rs`: 2 tests
+- `complex_scenarios.rs`: 1 test
 
 ### Coverage Goals
 The test suite aims for >80% coverage on critical code paths:
@@ -210,8 +275,18 @@ cargo test --release
 ## Contributing
 
 When adding new tests:
-1. Follow the existing naming conventions
-2. Add appropriate fixtures for new test cases
-3. Update snapshots when output format changes
-4. Test both success and failure scenarios
-5. Add comprehensive error case testing
+1. **Follow naming conventions**: Use descriptive test function names starting with `test_`
+2. **Add fixtures**: Create appropriate `.ath` test files in `tests/fixtures/` for new scenarios
+3. **Choose the right category**: Place structural tests in the appropriate category file
+4. **Test both scenarios**: Include success and failure cases
+5. **Update documentation**: Update this README when adding new test categories
+6. **Keep tests focused**: Each test should verify one specific aspect of functionality
+
+### Adding Structural Tests
+For new structural tests, place them in the appropriate category:
+- `basic_structure.rs`: YAML structure and service count validation
+- `service_configuration.rs`: Service settings (env vars, ports, volumes)
+- `networking.rs`: Network configuration and dependencies
+- `policies.rs`: Restart policies and health checks
+- `formatting.rs`: YAML validity and output formatting
+- `complex_scenarios.rs`: Multi-service architecture tests
