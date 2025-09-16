@@ -1,28 +1,75 @@
-# 🏛️ Athena - Production-Ready DevOps Toolkit
+# Athena - Production-Ready DevOps Toolkit
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-0.1.0-green.svg)](Cargo.toml)
 
-**Athena** is a powerful CLI toolkit that combines two essential DevOps tools:
-1. **Docker Compose Generator** - Convert COBOL-inspired DSL to production-ready Docker Compose
-2. **Boilerplate Project Generator** - Create full-stack applications with FastAPI, Go, Flask
+Athena is a powerful CLI toolkit for back-end developers and DevOps engineers that simplifies project creation and infrastructure setup. It provides two main capabilities:
+
+1. **Docker Compose Generator**: Transform a COBOL-inspired DSL into production-ready Docker Compose configurations with minimal effort.
+2. **Project Boilerplate Generator**: Quickly scaffold full-stack back-end projects using frameworks like FastAPI, Go (Gin/Echo/Fiber), and Flask, with modern best practices and Docker integration.
+
 
 Built with performance and maintainability in mind, Athena uses intelligent defaults and modern Docker standards to generate optimized configurations with minimal configuration.
 
-## 📋 Table of Contents
+## Why Athena DSL?
 
-- [🚀 Quick Start](#-quick-start)
-- [✨ Key Features](#-key-features)
-- [📦 Installation](#-installation)
-- [🏗️ Docker Compose Generator](#️-docker-compose-generator)
-- [🧬 Boilerplate Project Generator](#-boilerplate-project-generator)
-- [📖 DSL Reference](#-dsl-reference)
-- [🎯 Examples](#-examples)
-- [🏗️ Architecture](#️-architecture)
-- [🔧 Development](#-development)
+Writing infrastructure in plain YAML often leads to:
 
-## 🚀 Quick Start
+- **Repetition**: ports, env vars, healthchecks duplicated across files
+- **Verbosity**: even small projects need hundreds of lines of config
+- **Errors**: indentation, misplaced keys, and subtle schema mistakes
+- **Low readability**: hard for newcomers to understand what's happening
+
+Athena introduces a **COBOL-inspired DSL** designed for clarity and speed:
+
+### Advantages over plain YAML
+- **Declarative & explicit**: easy to read and understand at a glance
+- **Minimal boilerplate**: no need to repeat Docker defaults
+- **Error-resistant**: parser catches common mistakes early
+- **Smart defaults**: healthchecks, restart policies, and networks added automatically
+- **Composable**: same DSL can currently generate Docker Compose, and in the future Kubernetes and Terraform
+
+### Example
+Instead of writing verbose YAML:
+```yaml
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+  database:
+    image: postgres:15
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+```
+
+You just write:
+```athena
+DEPLOYMENT-ID MY_APP
+
+SERVICES SECTION
+
+SERVICE backend
+PORT-MAPPING 8000 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+END SERVICE
+
+SERVICE database
+IMAGE-ID postgres:15
+END SERVICE
+```
+
+Athena expands this into **production-ready Docker Compose** with all the right defaults.
+
+## Quick Start
 
 ### Installation
 ```bash
@@ -35,7 +82,7 @@ cargo install --path .
 athena --version
 ```
 
-### Generate Docker Compose (90% less configuration!)
+### Generate Docker Compose
 ```bash
 # Create a simple deploy.ath file
 echo 'DEPLOYMENT-ID MY_APP
@@ -64,510 +111,86 @@ athena init fastapi my-api --with-postgresql
 athena init go my-service --framework gin --with-mongodb
 ```
 
-## ✨ Key Features
+## Key Features
 
-### 🎯 **Intelligent Defaults 2025+**
-- **No more `version` field** - Modern Docker Compose spec compliance
-- **Auto-detects service types** - Database, Cache, WebApp, Proxy patterns
-- **Smart restart policies** - `always` for databases, `unless-stopped` for apps
-- **Optimized health checks** - Different intervals per service type
-- **Container naming** - Follows modern conventions (`project-service`)
+### Intelligent Defaults 2025+
+- No more `version` field modern Docker Compose spec compliance
+- Auto-detects service types database, Cache, WebApp, Proxy patterns
+- Smart restart policies `always` for databases, `unless-stopped` for apps
+- Optimized health checks different intervals per service type
+- Container naming follows modern conventions (`project-service`)
 
-### 🐳 **Docker-First Approach**
-- **Dockerfile by default** - No image? Uses `build.dockerfile: Dockerfile` 
-- **Intelligent networking** - Auto-configured networks with proper isolation
-- **Production-ready** - Security, resource limits, and health monitoring
-- **Standards compliant** - Follows Docker Compose 2025 best practices
+### Docker-First Approach
+- Dockerfile by default => No image? Uses `build.dockerfile: Dockerfile`
+- Intelligent networking => Auto-configured networks with proper isolation
+- Production-ready => Security, resource limits, and health monitoring
+- Standards compliant => Follows Docker Compose 2025 best practices
 
-### ⚡ **Performance Optimized**
-- **Topological sorting** - Services ordered by dependencies automatically
-- **Iterative validation** - Fast circular dependency detection
-- **Optimized parsing** - <1ms parse time, <2ms generation
-- **Memory efficient** - Pre-allocated structures for large compositions
+### Performance Optimized
+- Topological sorting => Services ordered by dependencies automatically
+- Iterative validation => Fast circular dependency detection
+- Optimized parsing => **<1ms parse time, <2ms generation**
+- Memory efficient => Pre-allocated structures for large compositions
 
-### 🧬 **Full-Stack Boilerplates**
-- **FastAPI + PostgreSQL/MongoDB** - Production authentication, async drivers
-- **Go + Gin/Echo/Fiber** - Clean architecture, proper middleware
-- **Flask + PostgreSQL** - Modern Python web development
-- **Docker ready** - Multi-stage builds, Nginx reverse proxy included
+### Full-Stack Boilerplates
+- FastAPI + PostgreSQL/MongoDB => Production authentication, async drivers
+- Go + Gin/Echo/Fiber => Clean architecture, proper middleware
+- Flask + PostgreSQL =>  Modern Python web development
+- Docker ready => Multi-stage builds, Nginx reverse proxy included
 
-## 📦 Installation
+## Documentation
 
-### Prerequisites
-- Rust 1.70+ 
-- Docker & Docker Compose (for testing generated files)
+### Core Documentation
+- [Installation Guide](docs/INSTALLATION.md)
+- [Docker Compose Generator Usage](docs/DSL_REFERENCE.md)
+- [Boilerplate Project Generator](docs/BOILERPLATE.md)
+- [Examples](docs/EXAMPLES.md)
 
-### Install from Source
-```bash
-git clone https://github.com/your-org/athena.git
-cd athena
-cargo install --path .
-```
+### Development
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Development Guide](docs/DEVELOPMENT.md)
+- [Testing Documentation](docs/TESTING.md)
 
-### Verify Installation
-```bash
-athena --version        # Check version
-athena info --examples # View DSL examples
-which athena           # Should show: ~/.cargo/bin/athena
-```
+## Basic Usage
 
-## 🏗️ Docker Compose Generator
-
-Transform minimal `.ath` configuration into production-ready Docker Compose files.
-
-### Basic Usage
+### Docker Compose Generator
 ```bash
 athena build deploy.ath              # Generate docker-compose.yml
 athena build deploy.ath -o custom.yml   # Custom output file
 athena validate deploy.ath           # Validate syntax only
 ```
 
-### Example Input/Output
-
-**Input (`deploy.ath`):**
-```cobol
-DEPLOYMENT-ID FASTAPI_PROJECT
-VERSION-ID 2.0.0
-
-ENVIRONMENT SECTION
-NETWORK-NAME fastapi_network
-
-SERVICES SECTION
-
-SERVICE backend
-PORT-MAPPING 8000 TO 8000
-ENV-VARIABLE {{DATABASE_URL}}
-COMMAND "uvicorn app.main:app --host 0.0.0.0 --port 8000"
-DEPENDS-ON database
-HEALTH-CHECK "curl -f http://localhost:8000/health || exit 1"
-RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
-END SERVICE
-
-SERVICE database
-IMAGE-ID postgres:15
-PORT-MAPPING 5432 TO 5432
-ENV-VARIABLE {{POSTGRES_USER}}
-ENV-VARIABLE {{POSTGRES_PASSWORD}}
-VOLUME-MAPPING "./postgres-data" TO "/var/lib/postgresql/data"
-END SERVICE
-```
-
-**Output (`docker-compose.yml`):**
-```yaml
-# Generated by Athena v0.1.0 from FASTAPI_PROJECT deployment
-# Project Version: 2.0.0
-# Generated: 2025-09-13 20:45:28 UTC
-# Features: Intelligent defaults, optimized networking, enhanced health checks
-# DO NOT EDIT MANUALLY - This file is auto-generated
-
-services:
-  backend:
-    build:                    # ← Dockerfile auto-detected!
-      context: .
-      dockerfile: Dockerfile
-    container_name: fastapi-project-backend
-    ports:
-      - 8000:8000
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    depends_on:
-      - database
-    healthcheck:              # ← Enhanced health check!
-      test: [CMD-SHELL, "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped   # ← Smart default for web apps
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-      restart_policy:         # ← Production restart policy
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-    networks:
-      - fastapi_network
-    pull_policy: missing
-    labels:                   # ← Metadata for tracking
-      athena.type: generic
-      athena.project: FASTAPI_PROJECT
-      athena.service: backend
-      athena.generated: 2025-09-13
-      
-  database:
-    image: postgres:15
-    container_name: fastapi-project-database
-    ports:
-      - 5432:5432
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ./postgres-data:/var/lib/postgresql/data
-    restart: always          # ← Smart default for databases
-    networks:
-      - fastapi_network
-    labels:
-      athena.type: database  # ← Auto-detected service type
-      athena.project: FASTAPI_PROJECT
-
-networks:
-  fastapi_network:
-    driver: bridge
-
-name: FASTAPI_PROJECT       # ← Modern Docker Compose naming
-```
-
-### 🎯 **What Athena Adds Automatically**
-
-- **Smart service detection** (Database, Cache, WebApp, Proxy)
-- **Optimized health checks** with service-specific intervals
-- **Production restart policies** based on service type  
-- **Modern container naming** (`project-service`)
-- **Metadata labels** for tracking and management
-- **Resource management** with deploy sections
-- **Network isolation** with custom networks
-- **Dockerfile integration** when no image specified
-- **Dependency ordering** with topological sort
-
-## 🧬 Boilerplate Project Generator
-
-Generate production-ready full-stack applications with modern best practices.
-
-### FastAPI Projects
+### Boilerplate Generator
 ```bash
-# FastAPI + PostgreSQL
+# FastAPI projects
 athena init fastapi my-api --with-postgresql
-
-# FastAPI + MongoDB (default)
 athena init fastapi my-api --with-mongodb
 
-# Without Docker files
-athena init fastapi my-api --no-docker
-```
-
-**Generated FastAPI Structure:**
-```
-my-api/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── core/
-│   │   ├── config.py        # Settings management
-│   │   ├── security.py      # JWT + password hashing
-│   │   └── database.py      # Async database config
-│   ├── api/
-│   │   ├── v1/             # API versioning
-│   │   │   ├── auth.py     # Authentication endpoints
-│   │   │   └── users.py    # User management
-│   ├── models/             # Database models
-│   ├── schemas/            # Pydantic models
-│   └── services/           # Business logic
-├── tests/                  # Comprehensive test suite
-├── nginx/                  # Reverse proxy config
-├── logs/                   # Application logs
-├── requirements.txt        # Python dependencies
-├── Dockerfile             # Production Docker build
-├── docker-compose.yml     # Full stack deployment
-└── .env.example          # Environment template
-```
-
-### Go Projects
-```bash
-# Go + Gin (default)
-athena init go my-service
-
-# Go + Echo framework
+# Go projects
+athena init go my-service --framework gin
 athena init go my-service --framework echo --with-postgresql
 
-# Go + Fiber framework
-athena init go my-service --framework fiber --with-mongodb
-```
-
-**Generated Go Structure:**
-```
-my-service/
-├── cmd/
-│   └── server/
-│       └── main.go         # Application entrypoint
-├── internal/
-│   ├── config/            # Configuration management
-│   ├── handler/           # HTTP handlers
-│   ├── middleware/        # Custom middleware
-│   ├── model/            # Data models
-│   ├── repository/       # Data access layer
-│   └── service/          # Business logic
-├── pkg/                   # Public packages
-├── tests/                 # Test suite
-├── scripts/               # Build & deployment scripts
-├── Dockerfile            # Production build
-├── docker-compose.yml    # Development environment
-├── go.mod               # Go modules
-└── .env.example         # Environment template
-```
-
-### Flask Projects
-```bash
-# Flask + PostgreSQL
+# Flask projects
 athena init flask my-app --with-postgresql
-
-# Flask + MongoDB
-athena init flask my-app --with-mongodb
 ```
 
-## 📖 DSL Reference
+## What Athena Adds Automatically
 
-### File Structure
-```cobol
-DEPLOYMENT-ID project_name    # Required: Project identifier
-VERSION-ID version           # Optional: Project version
+- Smart service detection (Database, Cache, WebApp, Proxy)
+- Optimized health checks with service-specific intervals
+- Production restart policies based on service type
+- Modern container naming (`project-service`)
+- Metadata labels for tracking and management
+- Resource management with deploy sections
+- Network isolation with custom networks
+- Dockerfile integration when no image specified
+- Dependency ordering with topological sort
 
-ENVIRONMENT SECTION          # Optional: Environment configuration
-NETWORK-NAME custom_network  # Optional: Custom network name
+## License
 
-SERVICES SECTION             # Required: Service definitions
+This project is licensed under the MIT License see the [LICENSE](LICENSE) file for details.
 
-SERVICE service_name         # Service block start
-# Service directives here
-END SERVICE                  # Service block end
-```
-
-### Service Directives
-
-| Directive | Description | Example |
-|-----------|-------------|---------|
-| `IMAGE-ID` | Docker image (if no Dockerfile) | `IMAGE-ID postgres:15` |
-| `PORT-MAPPING` | Port forwarding | `PORT-MAPPING 8000 TO 8000` |
-| `ENV-VARIABLE` | Environment variable | `ENV-VARIABLE {{DATABASE_URL}}` |
-| `COMMAND` | Container command | `COMMAND "npm start"` |
-| `DEPENDS-ON` | Service dependency | `DEPENDS-ON database` |
-| `HEALTH-CHECK` | Health check command | `HEALTH-CHECK "curl -f http://localhost/health"` |
-| `RESTART-POLICY` | Restart behavior | `RESTART-POLICY unless-stopped` |
-| `RESOURCE-LIMITS` | CPU/Memory limits | `RESOURCE-LIMITS CPU "0.5" MEMORY "512M"` |
-| `VOLUME-MAPPING` | Volume mount | `VOLUME-MAPPING "./data" TO "/app/data"` |
-
-### Smart Defaults by Service Type
-
-| Service Type | Auto-Detection | Restart Policy | Health Check Interval |
-|--------------|----------------|----------------|---------------------|
-| **Database** | `postgres`, `mysql`, `mongodb` | `always` | `10s` |
-| **Cache** | `redis`, `memcached` | `always` | `15s` |
-| **Proxy** | `nginx`, `apache`, `traefik` | `always` | `20s` |
-| **WebApp** | `node`, `python`, `java` | `unless-stopped` | `30s` |
-| **Generic** | Other images or Dockerfile | `unless-stopped` | `30s` |
-
-## 🎯 Examples
-
-### Microservices Architecture
-```cobol
-DEPLOYMENT-ID ECOMMERCE_STACK
-VERSION-ID 3.1.0
-
-ENVIRONMENT SECTION
-NETWORK-NAME ecommerce_net
-
-SERVICES SECTION
-
-SERVICE api_gateway
-IMAGE-ID nginx:alpine
-PORT-MAPPING 80 TO 80
-PORT-MAPPING 443 TO 443
-VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
-DEPENDS-ON users_service
-DEPENDS-ON products_service
-END SERVICE
-
-SERVICE users_service
-PORT-MAPPING 3001 TO 3000
-ENV-VARIABLE {{JWT_SECRET}}
-ENV-VARIABLE {{DATABASE_URL}}
-DEPENDS-ON users_db
-HEALTH-CHECK "curl -f http://localhost:3000/health"
-RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
-END SERVICE
-
-SERVICE products_service
-PORT-MAPPING 3002 TO 3000
-ENV-VARIABLE {{DATABASE_URL}}
-DEPENDS-ON products_db
-HEALTH-CHECK "curl -f http://localhost:3000/health"
-RESOURCE-LIMITS CPU "0.7" MEMORY "768M"
-END SERVICE
-
-SERVICE users_db
-IMAGE-ID postgres:15
-PORT-MAPPING 5433 TO 5432
-ENV-VARIABLE {{POSTGRES_USER}}
-ENV-VARIABLE {{POSTGRES_PASSWORD}}
-ENV-VARIABLE {{POSTGRES_DB}}
-VOLUME-MAPPING "./users-data" TO "/var/lib/postgresql/data"
-END SERVICE
-
-SERVICE products_db
-IMAGE-ID postgres:15
-PORT-MAPPING 5434 TO 5432
-ENV-VARIABLE {{POSTGRES_USER}}
-ENV-VARIABLE {{POSTGRES_PASSWORD}}
-ENV-VARIABLE {{POSTGRES_DB}}
-VOLUME-MAPPING "./products-data" TO "/var/lib/postgresql/data"
-END SERVICE
-
-SERVICE redis_cache
-IMAGE-ID redis:7-alpine
-PORT-MAPPING 6379 TO 6379
-VOLUME-MAPPING "./redis-data" TO "/data" (rw)
-COMMAND "redis-server --appendonly yes"
-END SERVICE
-```
-
-### Development Stack with Hot Reload
-```cobol
-DEPLOYMENT-ID DEV_STACK
-
-SERVICES SECTION
-
-SERVICE frontend
-PORT-MAPPING 3000 TO 3000
-ENV-VARIABLE {{REACT_APP_API_URL}}
-COMMAND "npm run dev"
-VOLUME-MAPPING "./src" TO "/app/src" (rw)
-DEPENDS-ON backend
-END SERVICE
-
-SERVICE backend
-PORT-MAPPING 8000 TO 8000
-ENV-VARIABLE {{DATABASE_URL}}
-ENV-VARIABLE {{DEBUG}}
-COMMAND "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-VOLUME-MAPPING "./app" TO "/app/app" (rw)
-DEPENDS-ON db
-END SERVICE
-
-SERVICE db
-IMAGE-ID postgres:15
-PORT-MAPPING 5432 TO 5432
-ENV-VARIABLE {{POSTGRES_USER}}
-ENV-VARIABLE {{POSTGRES_PASSWORD}}
-ENV-VARIABLE {{POSTGRES_DB}}
-VOLUME-MAPPING "./postgres-data" TO "/var/lib/postgresql/data"
-END SERVICE
-```
-
-## 🏗️ Architecture
-
-### Core Components
-
-```
-athena/
-├── src/
-│   ├── cli/                    # Command-line interface
-│   │   ├── args.rs            # Argument parsing
-│   │   ├── commands.rs        # Command implementations  
-│   │   └── utils.rs           # CLI utilities
-│   ├── athena/                # Core functionality
-│   │   ├── parser/            # DSL parsing
-│   │   │   ├── grammar.pest   # COBOL-inspired grammar
-│   │   │   ├── ast.rs         # Abstract syntax tree
-│   │   │   ├── parser.rs      # Parser implementation
-│   │   │   └── optimized_parser.rs # Performance optimizations
-│   │   ├── generator/         # Docker Compose generation
-│   │   │   ├── compose.rs     # Main generator
-│   │   │   └── defaults.rs    # Intelligent defaults engine
-│   │   └── error.rs           # Typed error handling
-│   ├── boilerplate/           # Project generators
-│   │   ├── fastapi.rs         # FastAPI project generator
-│   │   ├── go.rs              # Go project generator
-│   │   ├── flask.rs           # Flask project generator
-│   │   ├── templates.rs       # Embedded templates
-│   │   └── utils.rs           # Template utilities
-│   └── main.rs                # Application entrypoint
-├── tests/                     # Test suite
-│   ├── integration/           # CLI integration tests
-│   └── fixtures/              # Test .ath files
-└── examples/                  # Example configurations
-```
-
-### Performance Features
-- **Fast parsing** using Pest grammar (<1ms)
-- **Topological sorting** for dependency resolution
-- **Iterative validation** preventing stack overflow
-- **Memory-efficient** AST representation
-- **Optimized YAML generation** (<2ms)
-
-### Security Features
-- **Input validation** at parser level
-- **No code injection** in generated YAML
-- **Safe file handling** with proper error propagation
-- **Secure defaults** in generated configurations
-
-## 🔧 Development
-
-### Building from Source
-```bash
-# Debug build
-cargo build
-
-# Release build (optimized)
-cargo build --release
-
-# Install locally
-cargo install --path .
-```
-
-### Running Tests
-```bash
-# All tests
-cargo test
-
-# Integration tests only
-cargo test integration
-
-# Specific test with output
-cargo test test_enhanced_compose_generation -- --nocapture
-```
-
-### Development Commands
-```bash
-# Development cycle with tests
-make dev
-
-# Install and run demo
-make demo
-
-# Check installation
-make check-install
-
-# Clean build artifacts
-make clean
-```
-
-### Project Standards
-- **Rust 2021 Edition** with latest stable compiler
-- **Error handling** using `thiserror` for typed errors
-- **CLI framework** using `clap` v4 with derive macros
-- **Parsing** using `pest` for grammar-based parsing
-- **YAML generation** using `serde_yaml` for safe serialization
-- **Testing** using `assert_cmd` for CLI integration tests
-
-### Contributing
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make changes with tests
-4. Run `cargo test` and `cargo clippy`
-5. Commit changes (`git commit -m 'Add amazing feature'`)
-6. Push to branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Pest** for powerful parsing capabilities
 - **Clap** for excellent CLI framework
@@ -576,4 +199,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Built with ❤️ using Rust | Production-ready DevOps made simple**
+Built with ❤️ using Rust | Production-ready DevOps made simple

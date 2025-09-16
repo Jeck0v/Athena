@@ -1,0 +1,126 @@
+# Examples
+
+## Basic Example
+
+**Input (`deploy.ath`):**
+```cobol
+DEPLOYMENT-ID FASTAPI_PROJECT
+VERSION-ID 2.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME fastapi_network
+
+SERVICES SECTION
+
+SERVICE backend
+PORT-MAPPING 8000 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+COMMAND "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+DEPENDS-ON database
+HEALTH-CHECK "curl -f http://localhost:8000/health || exit 1"
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+END SERVICE
+
+SERVICE database
+IMAGE-ID postgres:15
+PORT-MAPPING 5432 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+VOLUME-MAPPING "./postgres-data" TO "/var/lib/postgresql/data"
+END SERVICE
+```
+
+## Microservices Architecture
+```cobol
+DEPLOYMENT-ID ECOMMERCE_STACK
+VERSION-ID 3.1.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME ecommerce_net
+
+SERVICES SECTION
+
+SERVICE api_gateway
+IMAGE-ID nginx:alpine
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d"
+DEPENDS-ON users_service
+DEPENDS-ON products_service
+END SERVICE
+
+SERVICE users_service
+PORT-MAPPING 3001 TO 3000
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{DATABASE_URL}}
+DEPENDS-ON users_db
+HEALTH-CHECK "curl -f http://localhost:3000/health"
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE products_service
+PORT-MAPPING 3002 TO 3000
+ENV-VARIABLE {{DATABASE_URL}}
+DEPENDS-ON products_db
+HEALTH-CHECK "curl -f http://localhost:3000/health"
+RESOURCE-LIMITS CPU "0.7" MEMORY "768M"
+END SERVICE
+
+SERVICE users_db
+IMAGE-ID postgres:15
+PORT-MAPPING 5433 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./users-data" TO "/var/lib/postgresql/data"
+END SERVICE
+
+SERVICE products_db
+IMAGE-ID postgres:15
+PORT-MAPPING 5434 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./products-data" TO "/var/lib/postgresql/data"
+END SERVICE
+
+SERVICE redis_cache
+IMAGE-ID redis:7-alpine
+PORT-MAPPING 6379 TO 6379
+VOLUME-MAPPING "./redis-data" TO "/data"
+COMMAND "redis-server --appendonly yes"
+END SERVICE
+```
+
+## Development Stack with Hot Reload
+```cobol
+DEPLOYMENT-ID DEV_STACK
+
+SERVICES SECTION
+
+SERVICE frontend
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE {{REACT_APP_API_URL}}
+COMMAND "npm run dev"
+VOLUME-MAPPING "./src" TO "/app/src"
+DEPENDS-ON backend
+END SERVICE
+
+SERVICE backend
+PORT-MAPPING 8000 TO 8000
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{DEBUG}}
+COMMAND "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+VOLUME-MAPPING "./app" TO "/app/app"
+DEPENDS-ON db
+END SERVICE
+
+SERVICE db
+IMAGE-ID postgres:15
+PORT-MAPPING 5432 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./postgres-data" TO "/var/lib/postgresql/data"
+END SERVICE
+```
