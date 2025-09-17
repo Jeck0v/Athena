@@ -422,3 +422,79 @@ END SERVICE"#;
         assert!(has_custom_network, "Service should be connected to custom network");
     }
 }
+
+#[test]
+fn test_port_conflict_prevention_in_generation() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let ath_content = r#"DEPLOYMENT-ID PORT_CONFLICT_TEST
+
+SERVICES SECTION
+
+SERVICE service1
+IMAGE-ID nginx:alpine
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE service2
+IMAGE-ID apache:latest
+PORT-MAPPING 8080 TO 8000
+END SERVICE"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "port_conflict.ath", ath_content);
+    let output_file = temp_dir.path().join("docker-compose.yml").to_string_lossy().to_string();
+    
+    // This should fail due to port conflict
+    let result = run_athena_build(&ath_file, &output_file);
+    assert!(result.is_err(), "Build should fail due to port conflict");
+    
+    let error_message = result.unwrap_err().to_string();
+    assert!(error_message.contains("Port conflict detected"), 
+        "Error should mention port conflict detection");
+    assert!(error_message.contains("8080"), 
+        "Error should mention the conflicting port");
+}
+
+#[test]
+fn test_successful_generation_with_different_ports() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let ath_content = r#"DEPLOYMENT-ID NO_PORT_CONFLICT_TEST
+
+SERVICES SECTION
+
+SERVICE service1
+IMAGE-ID nginx:alpine
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE service2
+IMAGE-ID apache:latest
+PORT-MAPPING 8081 TO 8000
+END SERVICE"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "no_conflict.ath", ath_content);
+    let output_file = temp_dir.path().join("docker-compose.yml").to_string_lossy().to_string();
+    
+    // This should succeed with different ports
+    let yaml_content = run_athena_build(&ath_file, &output_file)
+        .expect("Build should succeed with different ports");
+    
+    let parsed: Value = parse_yaml_safely(&yaml_content)
+        .expect("Generated YAML should be valid");
+    
+    let services = parsed["services"].as_mapping().expect("Services should be a mapping");
+    assert!(services.contains_key("service1"), "Should contain service1");
+    assert!(services.contains_key("service2"), "Should contain service2");
+    
+    // Verify both services have their respective ports
+    let service1 = &services["service1"];
+    let service2 = &services["service2"];
+    
+    let service1_ports = service1["ports"].as_sequence().expect("Service1 should have ports");
+    let service2_ports = service2["ports"].as_sequence().expect("Service2 should have ports");
+    
+    let port1_str = service1_ports[0].as_str().unwrap();
+    let port2_str = service2_ports[0].as_str().unwrap();
+    
+    assert!(port1_str.contains("8080"), "Service1 should use port 8080");
+    assert!(port2_str.contains("8081"), "Service2 should use port 8081");
+}

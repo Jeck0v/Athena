@@ -126,12 +126,17 @@ cargo test --test integration_tests structural --verbose
 - Tests environment variable templating
 - Tests port mappings, volume mounts
 - Tests health checks and resource limits
+- Tests port conflict detection during generation
+- Tests successful generation with different ports
 - Validates YAML syntax and structure
 
 ### 3. Error Handling Tests (`error_handling_test.rs`)
 - Tests file not found scenarios
 - Tests invalid syntax handling
 - Tests circular dependency detection
+- Tests port conflict detection with detailed error messages
+- Tests port conflict suggestions for resolution
+- Tests mixed port mapping scenarios
 - Tests malformed configuration errors
 - Tests permission and access errors
 - Validates error message quality
@@ -252,10 +257,10 @@ Modular boilerplate tests organized by framework, each verifying:
 ### Test Performance & Statistics
 
 **Current test suite:**
-- **Total tests**: 67 integration tests
+- **Total tests**: 69 integration tests
 - **CLI tests**: 13 tests (command parsing, help, validation)
-- **Docker Compose generation**: 9 tests (YAML generation and validation)
-- **Error handling**: 18 tests (comprehensive error scenarios)
+- **Docker Compose generation**: 11 tests (YAML generation, validation, port conflict detection)
+- **Error handling**: 21 tests (comprehensive error scenarios including port conflicts)
 - **Boilerplate generation**: 14 tests (modular by framework)
 - **Structural tests**: 13 tests (organized in 6 categories)
 - **Execution time**: < 1 second for structural tests
@@ -277,11 +282,57 @@ Modular boilerplate tests organized by framework, each verifying:
 - `go_tests.rs`: 3 tests (Gin, Echo, Fiber frameworks)
 - `common_tests.rs`: 3 tests (error handling, validation, help commands)
 
+## Port Conflict Detection Tests
+
+### Overview
+As of the latest update, Athena includes comprehensive port conflict detection that prevents Docker Compose generation when multiple services attempt to use the same host port.
+
+### Test Coverage
+
+#### In `docker_compose_generation_test.rs`:
+- **`test_port_conflict_prevention_in_generation`**: Verifies that Docker Compose generation fails when multiple services use the same host port (e.g., two services both mapping to port 8080)
+- **`test_successful_generation_with_different_ports`**: Confirms that generation succeeds when services use different host ports (e.g., one service uses 8080, another uses 8081)
+
+#### In `error_handling_test.rs`:
+- **`test_port_conflict_detection`**: Tests basic port conflict detection using the fixture file
+- **`test_port_conflict_suggestions`**: Verifies that the error message includes helpful port suggestions (e.g., "Consider using different ports like: 3000, 3001, 3002")
+- **`test_no_port_conflicts_different_ports`**: Ensures no false positives when services use different ports
+- **`test_port_conflict_with_mixed_mappings`**: Tests scenarios where services have multiple port mappings with conflicts
+
+### Key Features Tested
+1. **Conflict Detection**: Identifies when multiple services use the same host port
+2. **Detailed Error Messages**: Provides clear information about which services are conflicting
+3. **Port Suggestions**: Automatically generates alternative port suggestions
+4. **Mixed Mappings**: Handles services with multiple port mappings correctly
+5. **Integration with Generation**: Prevents invalid Docker Compose file creation
+
+### Example Test Scenarios
+```rust
+// Conflict scenario - should fail
+SERVICE service1
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE service2  
+PORT-MAPPING 8080 TO 8000  // ❌ Conflict on host port 8080
+END SERVICE
+
+// Valid scenario - should succeed
+SERVICE service1
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE service2
+PORT-MAPPING 8081 TO 8000  // ✅ Different host port
+END SERVICE
+```
+
 ### Coverage Goals
 The test suite aims for >80% coverage on critical code paths:
 - CLI argument parsing
 - .ath file parsing and validation
 - Docker Compose generation
+- Port conflict detection and validation
 - Error handling and reporting
 - Project initialization
 

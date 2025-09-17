@@ -170,6 +170,9 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
     // Fast circular dependency detection
     detect_circular_dependencies_optimized(compose)?;
 
+    // Detect port conflicts between services
+    detect_port_conflicts(compose)?;
+
     Ok(())
 }
 
@@ -264,6 +267,67 @@ fn has_cycle_iterative(
     }
     
     Ok(false)
+}
+
+/// Detect port conflicts between services
+fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
+    use std::collections::HashMap;
+    
+    let mut port_to_services: HashMap<String, Vec<String>> = HashMap::new();
+    
+    // Collect all host ports from all services
+    for (service_name, service) in &compose.services {
+        if let Some(ports) = &service.ports {
+            for port_mapping in ports {
+                if let Some(host_port) = extract_host_port(port_mapping) {
+                    port_to_services
+                        .entry(host_port)
+                        .or_insert_with(Vec::new)
+                        .push(service_name.clone());
+                }
+            }
+        }
+    }
+    
+    // Check for conflicts
+    for (port, services) in port_to_services {
+        if services.len() > 1 {
+            return Err(AthenaError::ValidationError(
+                format!(
+                    "Port conflict detected! Host port {} is used by multiple services: {}. \
+                     Each service must use a unique host port. Consider using different ports like: {}",
+                    port,
+                    services.join(", "),
+                    generate_port_suggestions(&port, services.len())
+                )
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
+/// Extract host port from port mapping (e.g., "8080:80" -> "8080")
+fn extract_host_port(port_mapping: &str) -> Option<String> {
+    let parts: Vec<&str> = port_mapping.split(':').collect();
+    if parts.len() >= 2 {
+        Some(parts[0].to_string())
+    } else {
+        None
+    }
+}
+
+/// Generate port suggestions for conflicts
+fn generate_port_suggestions(base_port: &str, count: usize) -> String {
+    if let Ok(port_num) = base_port.parse::<u16>() {
+        let mut suggestions = Vec::new();
+        for i in 0..count {
+            suggestions.push((port_num + i as u16).to_string());
+        }
+        suggestions.join(", ")
+    } else {
+        "8080, 8081, 8082".to_string() // fallback suggestions
+    }
 }
 
 /// Improve YAML formatting for better readability by adding blank lines between services
@@ -368,5 +432,21 @@ mod tests {
         assert!(yaml.contains("8000:8000"));
         assert!(yaml.contains("restart: unless-stopped"));
         assert!(yaml.contains("container_name: test-project-backend"));
+    }
+
+
+    #[test]
+    fn test_extract_host_port() {
+        assert_eq!(extract_host_port("8080:80"), Some("8080".to_string()));
+        assert_eq!(extract_host_port("3000:3000/tcp"), Some("3000".to_string()));
+        assert_eq!(extract_host_port("80"), None);
+        assert_eq!(extract_host_port(""), None);
+    }
+
+    #[test]
+    fn test_port_suggestions() {
+        assert_eq!(generate_port_suggestions("8080", 3), "8080, 8081, 8082");
+        assert_eq!(generate_port_suggestions("3000", 2), "3000, 3001");
+        assert_eq!(generate_port_suggestions("invalid", 2), "8080, 8081, 8082");
     }
 }
