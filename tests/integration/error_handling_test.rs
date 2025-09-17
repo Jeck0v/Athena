@@ -441,3 +441,123 @@ fn test_verbose_error_output() {
         .failure()
         .stderr(predicate::str::contains("Error:"));
 }
+
+// Port conflict detection tests
+#[test]
+fn test_port_conflict_detection() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let ath_file = create_test_ath_file(
+        &temp_dir,
+        "port_conflicts.ath",
+        include_str!("../fixtures/port_conflicts.ath"),
+    );
+    
+    let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    cmd.arg("build").arg(&ath_file);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Port conflict detected"))
+        .stderr(predicate::str::contains("8080"))
+        .stderr(predicate::str::contains("app1"))
+        .stderr(predicate::str::contains("app2"))
+        .stderr(predicate::str::contains("Consider using different ports"));
+}
+
+#[test]
+fn test_port_conflict_suggestions() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let port_conflict_content = r#"DEPLOYMENT-ID test_suggestions
+
+SERVICES SECTION
+
+SERVICE service1
+IMAGE-ID nginx:alpine
+PORT-MAPPING 3000 TO 80
+END SERVICE
+
+SERVICE service2
+IMAGE-ID apache:latest
+PORT-MAPPING 3000 TO 8080
+END SERVICE
+
+SERVICE service3
+IMAGE-ID httpd:alpine
+PORT-MAPPING 3000 TO 8000
+END SERVICE"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "port_suggestions.ath", port_conflict_content);
+    
+    let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    cmd.arg("build").arg(&ath_file);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Port conflict detected"))
+        .stderr(predicate::str::contains("3000"))
+        .stderr(predicate::str::contains("Consider using different ports"))
+        .stderr(predicate::str::contains("3000, 3001, 3002"));
+}
+
+#[test]
+fn test_no_port_conflicts_different_ports() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let no_conflict_content = r#"DEPLOYMENT-ID test_no_conflicts
+
+SERVICES SECTION
+
+SERVICE app1
+IMAGE-ID nginx:alpine
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE app2
+IMAGE-ID httpd:alpine
+PORT-MAPPING 8081 TO 8000
+END SERVICE
+
+SERVICE app3
+IMAGE-ID apache:latest
+PORT-MAPPING 9000 TO 80
+END SERVICE"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "no_conflicts.ath", no_conflict_content);
+    
+    let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    cmd.arg("build").arg(&ath_file);
+
+    // This should succeed without port conflicts
+    cmd.assert()
+        .success();
+}
+
+#[test]
+fn test_port_conflict_with_mixed_mappings() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let mixed_conflict_content = r#"DEPLOYMENT-ID test_mixed
+
+SERVICES SECTION
+
+SERVICE web
+IMAGE-ID nginx:alpine
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+END SERVICE
+
+SERVICE api
+IMAGE-ID node:alpine
+PORT-MAPPING 80 TO 3000
+END SERVICE"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "mixed_conflicts.ath", mixed_conflict_content);
+    
+    let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    cmd.arg("build").arg(&ath_file);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Port conflict detected"))
+        .stderr(predicate::str::contains("80"))
+        .stderr(predicate::str::contains("web"))
+        .stderr(predicate::str::contains("api"));
+}
