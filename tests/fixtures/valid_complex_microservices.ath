@@ -1,0 +1,146 @@
+DEPLOYMENT-ID COMPLEX_MICROSERVICES_TEST
+VERSION-ID 2.1.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME complex_microservices_network
+
+SERVICES SECTION
+
+SERVICE api_gateway
+IMAGE-ID nginx:alpine
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+VOLUME-MAPPING "./nginx/conf" TO "/etc/nginx/conf.d" (ro)
+VOLUME-MAPPING "./nginx/ssl" TO "/etc/nginx/ssl" (ro)
+DEPENDS-ON auth_service
+DEPENDS-ON user_service
+DEPENDS-ON payment_service
+RESTART-POLICY always
+HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
+END SERVICE
+
+SERVICE auth_service
+IMAGE-ID node:18-alpine
+PORT-MAPPING 3001 TO 3000
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{AUTH_DB_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+COMMAND "npm start"
+DEPENDS-ON auth_db
+DEPENDS-ON redis
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE user_service
+IMAGE-ID node:18-alpine
+PORT-MAPPING 3002 TO 3000
+ENV-VARIABLE {{USER_DB_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+ENV-VARIABLE {{ELASTICSEARCH_URL}}
+COMMAND "npm start"
+DEPENDS-ON user_db
+DEPENDS-ON redis
+DEPENDS-ON elasticsearch
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.7" MEMORY "768M"
+END SERVICE
+
+SERVICE payment_service
+IMAGE-ID python:3.11-slim
+PORT-MAPPING 3003 TO 5000
+ENV-VARIABLE {{PAYMENT_DB_URL}}
+ENV-VARIABLE {{STRIPE_API_KEY}}
+ENV-VARIABLE {{RABBITMQ_URL}}
+COMMAND "python app.py"
+DEPENDS-ON payment_db
+DEPENDS-ON rabbitmq
+HEALTH-CHECK "curl -f http://localhost:5000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+END SERVICE
+
+SERVICE notification_service
+IMAGE-ID python:3.11-slim
+PORT-MAPPING 3004 TO 5000
+ENV-VARIABLE {{EMAIL_API_KEY}}
+ENV-VARIABLE {{SMS_API_KEY}}
+ENV-VARIABLE {{RABBITMQ_URL}}
+COMMAND "python notification_worker.py"
+DEPENDS-ON rabbitmq
+HEALTH-CHECK "curl -f http://localhost:5000/health || exit 1"
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
+END SERVICE
+
+SERVICE auth_db
+IMAGE-ID postgres:15
+PORT-MAPPING 5433 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./data/auth-db" TO "/var/lib/postgresql/data"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE user_db
+IMAGE-ID postgres:15
+PORT-MAPPING 5434 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./data/user-db" TO "/var/lib/postgresql/data"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE payment_db
+IMAGE-ID postgres:15
+PORT-MAPPING 5435 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+VOLUME-MAPPING "./data/payment-db" TO "/var/lib/postgresql/data"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE redis
+IMAGE-ID redis:7-alpine
+PORT-MAPPING 6379 TO 6379
+VOLUME-MAPPING "./data/redis" TO "/data" (rw)
+COMMAND "redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE elasticsearch
+IMAGE-ID docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+PORT-MAPPING 9200 TO 9200
+PORT-MAPPING 9300 TO 9300
+ENV-VARIABLE {{ELASTIC_PASSWORD}}
+ENV-VARIABLE {{discovery.type}}
+VOLUME-MAPPING "./data/elasticsearch" TO "/usr/share/elasticsearch/data"
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+END SERVICE
+
+SERVICE rabbitmq
+IMAGE-ID rabbitmq:3-management
+PORT-MAPPING 5672 TO 5672
+PORT-MAPPING 15672 TO 15672
+ENV-VARIABLE {{RABBITMQ_DEFAULT_USER}}
+ENV-VARIABLE {{RABBITMQ_DEFAULT_PASS}}
+VOLUME-MAPPING "./data/rabbitmq" TO "/var/lib/rabbitmq"
+RESTART-POLICY always
+END SERVICE
+
+SERVICE monitoring
+IMAGE-ID prom/prometheus:latest
+PORT-MAPPING 9090 TO 9090
+VOLUME-MAPPING "./monitoring/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
+VOLUME-MAPPING "./data/prometheus" TO "/prometheus"
+DEPENDS-ON auth_service
+DEPENDS-ON user_service
+DEPENDS-ON payment_service
+RESTART-POLICY always
+END SERVICE

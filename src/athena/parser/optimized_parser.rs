@@ -3,10 +3,13 @@ use crate::athena::error::{AthenaError, AthenaResult};
 use super::ast::*;
 
 /// Optimized parser with performance improvements and better error handling
+#[allow(dead_code)]
 pub struct OptimizedParser;
 
 impl OptimizedParser {
     /// Parse Athena file with optimized performance and enhanced error reporting
+    #[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn parse_with_performance_optimizations(input: &str) -> AthenaResult<AthenaFile> {
         // Pre-validate input for common issues
         Self::pre_validate_input(input)?;
@@ -19,6 +22,7 @@ impl OptimizedParser {
     }
     
     /// Pre-validation for common syntax issues to fail fast
+    #[allow(dead_code)]
     fn pre_validate_input(input: &str) -> AthenaResult<()> {
         let trimmed = input.trim();
         
@@ -60,6 +64,7 @@ impl OptimizedParser {
     }
     
     /// Optimize the AST after parsing for better runtime performance
+    #[allow(dead_code)]
     fn optimize_ast(mut athena_file: AthenaFile) -> AthenaResult<AthenaFile> {
         // Sort services by dependency order for faster dependency resolution
         athena_file.services.services = Self::topological_sort_services(athena_file.services.services)?;
@@ -76,6 +81,7 @@ impl OptimizedParser {
     }
     
     /// Topological sort services by dependencies for optimal processing order
+    #[allow(dead_code)]
     fn topological_sort_services(services: Vec<Service>) -> AthenaResult<Vec<Service>> {
         use std::collections::{HashMap, VecDeque};
         
@@ -140,6 +146,7 @@ impl OptimizedParser {
     }
     
     /// Optimize individual service configuration
+    #[allow(dead_code)]
     fn optimize_service(service: &mut Service) {
         // Remove duplicate environment variables
         service.environment.dedup();
@@ -160,6 +167,7 @@ impl OptimizedParser {
     }
     
     /// Apply intelligent defaults based on service patterns
+    #[allow(dead_code)]
     fn apply_intelligent_defaults(athena_file: &mut AthenaFile) {
         // Set default deployment if missing
         if athena_file.deployment.is_none() {
@@ -196,6 +204,7 @@ impl OptimizedParser {
     }
     
     /// Parse with caching for repeated parsing operations
+    #[allow(dead_code)]
     pub fn parse_with_cache(
         input: &str, 
         cache: &mut HashMap<u64, AthenaFile>
@@ -221,6 +230,7 @@ impl OptimizedParser {
     }
     
     /// Validate syntax without full parsing for quick feedback
+    #[allow(dead_code)]
     pub fn quick_syntax_check(input: &str) -> AthenaResult<()> {
         Self::pre_validate_input(input)?;
         
@@ -264,6 +274,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(dead_code)]
     fn test_pre_validation() {
         assert!(OptimizedParser::pre_validate_input("").is_err());
         assert!(OptimizedParser::pre_validate_input("DEPLOYMENT-ID test").is_err());
@@ -278,6 +289,7 @@ mod tests {
     }
     
     #[test]
+    #[allow(dead_code)]
     fn test_unbalanced_service_blocks() {
         let invalid_input = r#"
             SERVICES SECTION
@@ -291,6 +303,7 @@ mod tests {
     }
     
     #[test]
+    #[allow(dead_code)]
     fn test_quick_syntax_check() {
         let invalid_port = r#"
             SERVICES SECTION

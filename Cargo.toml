@@ -41,6 +41,8 @@ tempfile = "3.8"
 assert_cmd = "2.0"
 predicates = "3.0"
 tempfile = "3.8"
+serial_test = "3.0"  # Run tests sequentially when needed
+pretty_assertions = "1.4"  # Better assertion output
 
 [profile.release]
 strip = true

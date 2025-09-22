@@ -7,6 +7,12 @@ use std::path::Path;
 
 pub struct FlaskGenerator;
 
+impl Default for FlaskGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FlaskGenerator {
     pub fn new() -> Self {
         Self

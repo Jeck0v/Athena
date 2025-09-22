@@ -4,28 +4,37 @@ use crate::athena::parser::ast::*;
 
 /// Default Docker Compose configurations based on service patterns and Docker standards
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ServiceDefaults {
     pub restart_policy: RestartPolicy,
     pub health_check_interval: String,
     pub health_check_timeout: String,
     pub health_check_retries: u32,
     pub health_check_start_period: String,
+    #[allow(dead_code)]
     pub network_mode: NetworkMode,
     pub pull_policy: PullPolicy,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum NetworkMode {
     Bridge,
+    #[allow(dead_code)]
     Host,
+    #[allow(dead_code)]
     None,
+    #[allow(dead_code)]
     Custom(String),
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum PullPolicy {
+    #[allow(dead_code)]
     Always,
     Missing,
+    #[allow(dead_code)]
     Never,
 }
 
@@ -55,7 +64,7 @@ pub struct EnhancedDockerService {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub environment: Option<HashMap<String, String>>,
+    pub environment: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -280,29 +289,30 @@ impl DefaultsEngine {
         Some(port_strings)
     }
     
-    fn convert_environment(env_vars: &[EnvironmentVariable]) -> Option<HashMap<String, String>> {
+    fn convert_environment(env_vars: &[EnvironmentVariable]) -> Option<Vec<String>> {
         if env_vars.is_empty() {
             return None;
         }
         
-        let mut env_map = HashMap::new();
+        let mut env_list = Vec::new();
         for env_var in env_vars {
             match env_var {
                 EnvironmentVariable::Template(var_name) => {
-                    env_map.insert(var_name.clone(), format!("${{{}}}", var_name));
+                    env_list.push(format!("{}=${{{}}}", var_name, var_name));
                 }
                 EnvironmentVariable::Literal(value) => {
-                    // Try to parse KEY=VALUE format, fallback to generic name
-                    if let Some((key, val)) = value.split_once('=') {
-                        env_map.insert(key.to_string(), val.to_string());
+                    // If it's already in KEY=VALUE format, use as-is
+                    // Otherwise, treat as a standalone value
+                    if value.contains('=') {
+                        env_list.push(value.clone());
                     } else {
-                        env_map.insert("ENV_VALUE".to_string(), value.clone());
+                        env_list.push(format!("VALUE={}", value));
                     }
                 }
             }
         }
         
-        Some(env_map)
+        Some(env_list)
     }
     
     fn convert_volumes(volumes: &[VolumeMapping]) -> Option<Vec<String>> {
@@ -423,7 +433,7 @@ mod tests {
             "test_project"
         );
         
-        assert_eq!(enhanced.image, "python:3.11-slim");
+        assert_eq!(enhanced.image, Some("python:3.11-slim".to_string()));
         assert_eq!(enhanced.restart, "unless-stopped");
         assert_eq!(enhanced.networks, vec!["test_network"]);
         assert!(enhanced.labels.is_some());

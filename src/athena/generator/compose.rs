@@ -7,8 +7,6 @@ use super::defaults::{DefaultsEngine, EnhancedDockerService};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerCompose {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
     services: HashMap<String, EnhancedDockerService>,
     #[serde(skip_serializing_if = "Option::is_none")]
     networks: Option<HashMap<String, DockerNetwork>>,
@@ -62,7 +60,6 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     let network_name = athena_file.get_network_name();
     
     let mut compose = DockerCompose {
-        version: None, // Version field is obsolete in Docker Compose 2025+
         name: Some(project_name.clone()),
         services: HashMap::new(),
         networks: None,
@@ -94,9 +91,12 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
 
     // Generate optimized YAML
     let yaml = serde_yaml::to_string(&compose)
-        .map_err(|e| AthenaError::YamlError(e))?;
+        .map_err(AthenaError::YamlError)?;
 
-    Ok(add_enhanced_yaml_comments(yaml, athena_file))
+    // Improve formatting for better readability
+    let formatted_yaml = improve_yaml_formatting(yaml);
+
+    Ok(add_enhanced_yaml_comments(formatted_yaml, athena_file))
 }
 
 /// Create optimized network configuration
@@ -169,6 +169,9 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
 
     // Fast circular dependency detection
     detect_circular_dependencies_optimized(compose)?;
+
+    // Detect port conflicts between services
+    detect_port_conflicts(compose)?;
 
     Ok(())
 }
@@ -266,6 +269,102 @@ fn has_cycle_iterative(
     Ok(false)
 }
 
+/// Detect port conflicts between services
+fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
+    use std::collections::HashMap;
+    
+    let mut port_to_services: HashMap<String, Vec<String>> = HashMap::new();
+    
+    // Collect all host ports from all services
+    for (service_name, service) in &compose.services {
+        if let Some(ports) = &service.ports {
+            for port_mapping in ports {
+                if let Some(host_port) = extract_host_port(port_mapping) {
+                    port_to_services
+                        .entry(host_port)
+                        .or_insert_with(Vec::new)
+                        .push(service_name.clone());
+                }
+            }
+        }
+    }
+    
+    // Check for conflicts
+    for (port, services) in port_to_services {
+        if services.len() > 1 {
+            return Err(AthenaError::ValidationError(
+                format!(
+                    "Port conflict detected! Host port {} is used by multiple services: {}. \
+                     Each service must use a unique host port. Consider using different ports like: {}",
+                    port,
+                    services.join(", "),
+                    generate_port_suggestions(&port, services.len())
+                )
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
+/// Extract host port from port mapping (e.g., "8080:80" -> "8080")
+fn extract_host_port(port_mapping: &str) -> Option<String> {
+    let parts: Vec<&str> = port_mapping.split(':').collect();
+    if parts.len() >= 2 {
+        Some(parts[0].to_string())
+    } else {
+        None
+    }
+}
+
+/// Generate port suggestions for conflicts
+fn generate_port_suggestions(base_port: &str, count: usize) -> String {
+    if let Ok(port_num) = base_port.parse::<u16>() {
+        let mut suggestions = Vec::new();
+        for i in 0..count {
+            suggestions.push((port_num + i as u16).to_string());
+        }
+        suggestions.join(", ")
+    } else {
+        "8080, 8081, 8082".to_string() // fallback suggestions
+    }
+}
+
+/// Improve YAML formatting for better readability by adding blank lines between services
+fn improve_yaml_formatting(yaml: String) -> String {
+    let lines: Vec<&str> = yaml.lines().collect();
+    let mut formatted_lines = Vec::new();
+    let mut inside_services = false;
+    let mut first_service = true;
+    
+    for line in lines.iter() {
+        // Check if we're in the services section
+        if line.starts_with("services:") {
+            inside_services = true;
+            first_service = true;
+            formatted_lines.push(line.to_string());
+            continue;
+        }
+        
+        // Check if we've left the services section (reached networks, volumes, etc.)
+        if inside_services && !line.starts_with(" ") && !line.trim().is_empty() {
+            inside_services = false;
+        }
+        
+        // Detect service definition: exactly 2 spaces + service name + colon
+        if inside_services && line.starts_with("  ") && !line.starts_with("    ") && line.contains(':') {
+            // This is a service definition (e.g., "  web:", "  app:", "  database:")
+            if !first_service {
+                formatted_lines.push(String::new()); // Add blank line before service
+            }
+            first_service = false;
+        }
+        
+        formatted_lines.push(line.to_string());
+    }
+    
+    formatted_lines.join("\n")
+}
 
 /// Add enhanced YAML comments with metadata and optimization notes
 fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String {
@@ -327,11 +426,27 @@ mod tests {
         assert!(result.is_ok());
         
         let yaml = result.unwrap();
-        assert!(yaml.contains("version: '3.8'"));
+        assert!(!yaml.contains("version:"));
         assert!(yaml.contains("backend:"));
         assert!(yaml.contains("image: python:3.11-slim"));
         assert!(yaml.contains("8000:8000"));
         assert!(yaml.contains("restart: unless-stopped"));
         assert!(yaml.contains("container_name: test-project-backend"));
+    }
+
+
+    #[test]
+    fn test_extract_host_port() {
+        assert_eq!(extract_host_port("8080:80"), Some("8080".to_string()));
+        assert_eq!(extract_host_port("3000:3000/tcp"), Some("3000".to_string()));
+        assert_eq!(extract_host_port("80"), None);
+        assert_eq!(extract_host_port(""), None);
+    }
+
+    #[test]
+    fn test_port_suggestions() {
+        assert_eq!(generate_port_suggestions("8080", 3), "8080, 8081, 8082");
+        assert_eq!(generate_port_suggestions("3000", 2), "3000, 3001");
+        assert_eq!(generate_port_suggestions("invalid", 2), "8080, 8081, 8082");
     }
 }

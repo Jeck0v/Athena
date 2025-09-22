@@ -1,0 +1,30 @@
+DEPLOYMENT-ID INVALID_SYNTAX_TEST
+VERSION-ID 1.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME invalid_test_network
+
+SERVICES SECTION
+
+SERVICE web
+IMAGE-ID nginx:alpine
+PORT-MAPPING 8080 TO 80
+ENV-VARIABLE {{NGINX_HOST}}
+HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
+RESTART-POLICY unless-stopped
+# Missing END SERVICE - this should cause parse error
+
+SERVICE app
+IMAGE-ID python:3.11-slim
+PORT-MAPPING 5000 TO 5000
+INVALID-DIRECTIVE "this should not exist"
+ENV-VARIABLE {{DATABASE_URL}}
+DEPENDS-ON database
+END SERVICE
+
+SERVICE database
+IMAGE-ID postgres:15
+PORT-MAPPING INVALID_PORT_FORMAT
+ENV-VARIABLE {{POSTGRES_USER}
+VOLUME-MAPPING "./data" TO "/var/lib/postgresql/data"
+END SERVICE

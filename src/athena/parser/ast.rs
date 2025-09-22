@@ -53,16 +53,11 @@ pub struct PortMapping {
     pub protocol: Protocol,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum Protocol {
+    #[default]
     Tcp,
     Udp,
-}
-
-impl Default for Protocol {
-    fn default() -> Self {
-        Protocol::Tcp
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
