@@ -205,6 +205,102 @@ services:
 💡 Available services: api, cache, frontend
 ```
 
+## 🚨 Advanced Error Handling System
+
+### Line & Column Precision with Visual Context
+
+Athena provides **exact error locations** with line and column numbers, plus visual context showing the problematic code:
+
+**Parse Error Example:**
+```
+Error: Parse error at line 8, column 1: Missing 'END SERVICE' statement
+   |
+ 8 | # Missing END SERVICE statement  
+   | ^ Error here
+
+Suggestion: Each SERVICE block must be closed with 'END SERVICE'
+```
+
+**Port Mapping Error Example:**
+```
+Error: Parse error at line 7, column 20: Invalid port mapping format
+   |
+ 7 | PORT-MAPPING 8080 INVALID_FORMAT 80
+   |                    ^ Error here
+
+Suggestion: Use PORT-MAPPING <host_port> TO <container_port> format, e.g., PORT-MAPPING 8080 TO 80
+```
+
+### Intelligent Error Categories
+
+**1. Syntax Errors (Parse Errors):**
+- Missing keywords (END SERVICE, DEPLOYMENT-ID)
+- Invalid formats (port mappings, environment variables)  
+- Malformed structures (unclosed blocks, missing sections)
+
+**2. Validation Errors:**
+- Port conflicts between services
+- Invalid service references in dependencies
+- Circular dependencies in service chains
+- Missing required configurations
+
+**3. Configuration Errors:**
+- Invalid restart policies
+- Malformed resource limits
+- Incorrect volume mappings
+
+### Enhanced Port Conflict Detection
+
+**Input with Conflicts:**
+```athena
+SERVICE frontend
+PORT-MAPPING 8080 TO 80
+END SERVICE
+
+SERVICE backend  
+PORT-MAPPING 8080 TO 3000  # Conflict!
+END SERVICE
+
+SERVICE api
+PORT-MAPPING 8080 TO 8000  # Another conflict!
+END SERVICE
+```
+
+**Enhanced Error Output:**
+```
+Error: Validation error: Port conflict detected! Host port 8080 is used by multiple services: frontend, backend, api
+Affected services: frontend, backend, api
+
+Suggestion: Use different host ports, e.g., 8080, 8081, 8082
+```
+
+### Smart Service Reference Validation
+
+**Input with Invalid Reference:**
+```athena
+SERVICE frontend
+DEPENDS-ON nonexistent_backend  # Invalid reference!
+END SERVICE
+
+SERVICE database
+IMAGE-ID "postgres:15"
+END SERVICE
+```
+
+**Enhanced Error Output:**
+```
+Error: Validation error: Service 'frontend' depends on 'nonexistent_backend' which doesn't exist
+Affected services: frontend, nonexistent_backend
+
+Suggestion: Available services: database, frontend. Check the service name in your DEPENDS-ON declaration
+```
+
+### Fail-Fast Error Processing
+
+- **Immediate validation**: Errors stop processing before attempting generation
+- **No partial generation**: Docker Compose files are only created when validation passes completely
+- **Clear error flow**: Users see exactly what needs to be fixed before proceeding
+
 ## 🏷️ Metadata and Labels
 
 ### Automatic Label Generation

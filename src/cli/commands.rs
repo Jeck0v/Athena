@@ -73,11 +73,7 @@ fn execute_build(
         return Ok(());
     }
 
-    // Generate docker-compose.yml
-    if verbose {
-        println!("Generating docker-compose.yml...");
-    }
-
+    // Generate docker-compose.yml (includes validation)
     let compose_yaml = generate_docker_compose(&athena_file)?;
 
     // Determine output file

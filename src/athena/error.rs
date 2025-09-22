@@ -43,6 +43,7 @@ pub struct EnhancedParseError {
 #[derive(Debug, Clone)]
 pub struct EnhancedValidationError {
     pub message: String,
+    #[allow(dead_code)]
     pub error_type: ValidationErrorType,
     pub suggestion: Option<String>,
     pub related_services: Vec<String>,
@@ -116,6 +117,7 @@ impl EnhancedParseError {
         self
     }
     
+    #[allow(dead_code)]
     pub fn with_context(mut self, context: String) -> Self {
         self.context = Some(context);
         self
@@ -176,21 +178,6 @@ impl EnhancedValidationError {
         self
     }
     
-    pub fn port_conflict(port: &str, services: Vec<String>) -> Self {
-        let message = format!(
-            "Port conflict detected! Host port {} is used by multiple services: {}",
-            port, services.join(", ")
-        );
-        
-        let suggestion = format!(
-            "Use different host ports, e.g., {}",
-            generate_port_suggestions(port, services.len())
-        );
-        
-        Self::new(message, ValidationErrorType::PortConflict)
-            .with_suggestion(suggestion)
-            .with_services(services)
-    }
     
     pub fn service_reference(service: &str, dependency: &str, available: &[String]) -> Self {
         let message = format!(
@@ -222,17 +209,6 @@ impl EnhancedValidationError {
     }
 }
 
-fn generate_port_suggestions(base_port: &str, count: usize) -> String {
-    if let Ok(port_num) = base_port.parse::<u16>() {
-        let mut suggestions = Vec::new();
-        for i in 0..count {
-            suggestions.push(format!("{}:{}", port_num + i as u16, port_num));
-        }
-        suggestions.join(", ")
-    } else {
-        "8080:80, 8081:80, 8082:80".to_string()
-    }
-}
 
 impl AthenaError {
     #[allow(dead_code)]

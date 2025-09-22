@@ -294,9 +294,22 @@ fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
     // Check for conflicts
     for (port, services) in port_to_services {
         if services.len() > 1 {
-            return Err(AthenaError::validation_error_enhanced(
-                EnhancedValidationError::port_conflict(&port, services)
-            ));
+            let suggestion = format!(
+                "Use different host ports, e.g., {}",
+                generate_port_suggestions(&port, services.len())
+            );
+            
+            let error = EnhancedValidationError::new(
+                format!(
+                    "Port conflict detected! Host port {} is used by multiple services: {}",
+                    port, services.join(", ")
+                ),
+                ValidationErrorType::PortConflict
+            )
+            .with_suggestion(suggestion)
+            .with_services(services);
+            
+            return Err(AthenaError::validation_error_enhanced(error));
         }
     }
     
@@ -325,6 +338,7 @@ fn generate_port_suggestions(base_port: &str, count: usize) -> String {
         "8080, 8081, 8082".to_string() // fallback suggestions
     }
 }
+
 
 /// Improve YAML formatting for better readability by adding blank lines between services
 fn improve_yaml_formatting(yaml: String) -> String {

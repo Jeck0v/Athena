@@ -1,0 +1,73 @@
+DEPLOYMENT-ID MODERN_WEB_APP
+VERSION-ID 1.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME modern_app_network
+
+SERVICES SECTION
+
+SERVICE nginx_proxy
+IMAGE-ID "nginx:alpine"
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
+VOLUME-MAPPING "./nginx/ssl" TO "/etc/nginx/ssl" (ro)
+DEPENDS-ON backend
+RESTART-POLICY always
+HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
+END SERVICE
+
+SERVICE backend
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE {{NODE_ENV}}
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{MONGODB_URI}}
+ENV-VARIABLE {{API_PORT}}
+COMMAND "npm start"
+DEPENDS-ON mongodb
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+HEALTH-CHECK "curl -f http://localhost:3000/api/health || exit 1"
+END SERVICE
+
+SERVICE mongodb
+IMAGE-ID "mongo:7.0"
+PORT-MAPPING 27017 TO 27017
+ENV-VARIABLE {{MONGO_INITDB_ROOT_USERNAME}}
+ENV-VARIABLE {{MONGO_INITDB_ROOT_PASSWORD}}
+ENV-VARIABLE {{MONGO_INITDB_DATABASE}}
+VOLUME-MAPPING "./data/mongodb" TO "/data/db"
+VOLUME-MAPPING "./mongo-init" TO "/docker-entrypoint-initdb.d" (ro)
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.7" MEMORY "1024M"
+HEALTH-CHECK "mongosh --eval 'db.adminCommand(ping)' || exit 1"
+END SERVICE
+
+SERVICE redis_cache
+IMAGE-ID "redis:7-alpine"
+PORT-MAPPING 6379 TO 6379
+VOLUME-MAPPING "./data/redis" TO "/data"
+COMMAND "redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru"
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
+HEALTH-CHECK "redis-cli ping || exit 1"
+END SERVICE
+
+SERVICE monitoring
+IMAGE-ID "prom/prometheus:latest"
+PORT-MAPPING 9090 TO 9090
+VOLUME-MAPPING "./monitoring/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
+VOLUME-MAPPING "./data/prometheus" TO "/prometheus"
+DEPENDS-ON backend
+RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
+END SERVICE
+
+SERVICE logs_collector
+IMAGE-ID "fluent/fluent-bit:latest"
+VOLUME-MAPPING "./fluent-bit/fluent-bit.conf" TO "/fluent-bit/etc/fluent-bit.conf" (ro)
+VOLUME-MAPPING "/var/log" TO "/var/log" (ro)
+DEPENDS-ON backend
+RESTART-POLICY unless-stopped
+RESOURCE-LIMITS CPU "0.2" MEMORY "128M"
+END SERVICE
