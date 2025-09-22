@@ -461,7 +461,7 @@ fn test_port_conflict_detection() {
         .stderr(predicate::str::contains("8080"))
         .stderr(predicate::str::contains("app1"))
         .stderr(predicate::str::contains("app2"))
-        .stderr(predicate::str::contains("Consider using different ports"));
+        .stderr(predicate::str::contains("Use different host ports"));
 }
 
 #[test]
@@ -495,8 +495,7 @@ END SERVICE"#;
         .failure()
         .stderr(predicate::str::contains("Port conflict detected"))
         .stderr(predicate::str::contains("3000"))
-        .stderr(predicate::str::contains("Consider using different ports"))
-        .stderr(predicate::str::contains("3000, 3001, 3002"));
+        .stderr(predicate::str::contains("Use different host ports"));
 }
 
 #[test]

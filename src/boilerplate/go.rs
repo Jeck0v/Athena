@@ -164,7 +164,7 @@ func getEnvAsInt(key string, fallback int) int {
                 config_content = config_content.replace("{{/if}}", "");
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for Go projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -323,7 +323,7 @@ func runMigrations(db *sqlx.DB) error {
                 write_file(base_path.join("internal/database/postgres.go"), &postgres_content)?;
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for Go projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -433,7 +433,7 @@ func VerifyToken(tokenString, jwtSecret, expectedType string) (*Claims, error) {
 
         let models_go = match config.database {
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for Go projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -893,7 +893,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 
         let user_service_go = match config.database {
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for Go projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -1243,7 +1243,7 @@ networks:
                 compose_content = compose_content.replace("{{/if}}", "");
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for Go projects. Use Flask for MySQL support.".to_string()
                 ));
             }
