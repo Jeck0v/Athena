@@ -1,25 +1,25 @@
-# 🚨 Enhanced Error Handling System
+# Enhanced Error Handling System
 
 Athena features a comprehensive error handling system designed to provide clear, actionable feedback with precise location information and automatic suggestions for common issues.
 
-## 🎯 Key Features
+## Key Features
 
-### ✨ Line & Column Precision
+### Line & Column Precision
 - **Exact error location** with line and column numbers
 - **Visual context** showing the problematic code
 - **Error highlighting** pointing to the exact issue
 
-### 💡 Intelligent Suggestions
+### Intelligent Suggestions
 - **Automatic recommendations** for fixing common errors
 - **Context-aware suggestions** based on error type
 - **Alternative solutions** when multiple fixes are possible
 
-### 🔍 Advanced Validation
+### Advanced Validation
 - **Port conflict detection** with alternative suggestions
 - **Service reference validation** with available options
 - **Circular dependency detection** with clear explanations
 
-## 📍 Parse Error Examples
+##  Parse Error Examples
 
 ### Missing END SERVICE Statement
 
@@ -63,8 +63,8 @@ END SERVICE
 ```
 Error: Parse error at line 7, column 20: Invalid port mapping format
    |
- 7 | PORT-MAPPING 8080 INVALID_FORMAT 80
-   |                    ^ Error here
+ 7 | PORT-MAPPING 8080 : 80
+   |                   ^ Error here
 
 Suggestion: Use PORT-MAPPING <host_port> TO <container_port> format, e.g., PORT-MAPPING 8080 TO 80
 ```
@@ -90,10 +90,10 @@ Error: Parse error at line 7, column 1: Invalid environment variable format
  7 | ENV-VARIABLE INVALID_VAR_FORMAT
    | ^ Error here
 
-Suggestion: Use ENV-VARIABLE {{VAR_NAME}} for templates or ENV-VARIABLE "literal_value" for literals
+Suggestion: Use ENV-VARIABLE {{VAR_NAME}} for templates or ENV-VARIABLE "literal_value" for literals (not recommended)
 ```
 
-## ⚠️ Validation Error Examples
+## Validation Error Examples
 
 ### Port Conflicts Detection
 
@@ -187,7 +187,7 @@ Affected services: service_a
 Suggestion: Check the DEPENDS-ON declarations in your .ath file and remove circular dependencies
 ```
 
-## 🛠️ Error Categories
+## Error Categories
 
 ### 1. Syntax Errors (Parse Errors)
 - **Missing keywords** (END SERVICE, DEPLOYMENT-ID)
@@ -205,7 +205,7 @@ Suggestion: Check the DEPENDS-ON declarations in your .ath file and remove circu
 - **Malformed resource limits**
 - **Incorrect volume mappings**
 
-## 🎯 Error Resolution Process
+## Error Resolution Process
 
 ### 1. **Immediate Feedback**
 Athena stops processing as soon as an error is detected, preventing cascading issues.
@@ -222,9 +222,9 @@ Each error includes specific recommendations for fixing the issue.
 ### 5. **Related Information**
 For validation errors, Athena shows affected services and available alternatives.
 
-## 📚 Best Practices
+## Best Practices
 
-### ✅ Writing Error-Free .ath Files
+### Writing Error-Free .ath Files
 
 1. **Always close SERVICE blocks** with `END SERVICE`
 2. **Use consistent formatting** for port mappings: `PORT-MAPPING <host> TO <container>`
@@ -232,7 +232,7 @@ For validation errors, Athena shows affected services and available alternatives
 4. **Check service names** in DEPENDS-ON declarations
 5. **Avoid port conflicts** by using unique host ports
 
-### 🔧 Debugging Tips
+### Debugging Tips
 
 1. **Start simple** - build your .ath file incrementally
 2. **Use validation mode** with `athena validate file.ath`
@@ -240,12 +240,12 @@ For validation errors, Athena shows affected services and available alternatives
 4. **Review port mappings** - each service needs unique host ports
 5. **Test incrementally** - add services one by one
 
-## 🚀 Error Handling Architecture
+##  Error Handling Architecture
 
 The enhanced error system uses:
 
 - **Structured error types** with rich context information
-- **Location tracking** throughout the parsing pipeline  
+- **Location tracking** throughout the parsing pipeline
 - **Suggestion engine** that provides context-aware recommendations
 - **Validation pipeline** that catches logical errors before generation
 - **User-friendly formatting** with visual indicators and clear language

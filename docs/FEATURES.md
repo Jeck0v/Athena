@@ -1,8 +1,8 @@
-# 🚀 Athena Features Documentation
+#  Athena Features Documentation
 
 This document details the advanced features and capabilities of Athena, especially the recent performance and intelligence improvements.
 
-## 🧠 Intelligent Defaults Engine
+## Intelligent Defaults Engine
 
 ### Service Type Detection
 
@@ -32,7 +32,7 @@ database:
 
 ### Example: WebApp Service (Dockerfile)
 ```yaml
-# Input: No IMAGE-ID specified  
+# Input: No IMAGE-ID specified
 # Output: Auto-configured for Dockerfile
 webapp:
   build:                    # ← Dockerfile detected automatically
@@ -55,7 +55,7 @@ SERVICE frontend
 DEPENDS-ON backend
 END SERVICE
 
-SERVICE backend  
+SERVICE backend
 DEPENDS-ON database
 END SERVICE
 
@@ -70,7 +70,7 @@ services:
   database:    # ← Sorted first (no dependencies)
     # ...
   backend:     # ← Sorted second (depends on database)
-    # ...  
+    # ...
   frontend:    # ← Sorted last (depends on backend)
     # ...
 ```
@@ -86,11 +86,11 @@ services:
 
 ### Performance Metrics
 - **Parse time**: <1ms for typical files
-- **Generation time**: <2ms for 20+ service compositions  
+- **Generation time**: <2ms for 20+ service compositions
 - **Validation time**: <5ms with full circular dependency detection
 - **Memory usage**: ~2MB for large compositions (vs ~8MB before optimization)
 
-## 🐳 Docker Compose 2025+ Features
+## Docker Compose 2025+ Features
 
 ### Modern Compose Specification Compliance
 
@@ -111,18 +111,18 @@ services:
   app:
     # Modern container naming
     container_name: project-name-app     # kebab-case convention
-    
+
     # Optimized pull policy
     pull_policy: missing                 # Efficient default
-    
-    # Enhanced health checks  
+
+    # Enhanced health checks
     healthcheck:
       test: [CMD-SHELL, "curl -f http://localhost/health"]
       interval: 30s                     # Service-type optimized
       timeout: 10s
       retries: 3
       start_period: 40s                 # Extended for complex apps
-    
+
     # Production restart policies
     deploy:
       restart_policy:
@@ -130,7 +130,7 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
-        
+
     # Metadata labels for tracking
     labels:
       athena.project: PROJECT_NAME
@@ -205,7 +205,7 @@ services:
 💡 Available services: api, cache, frontend
 ```
 
-## 🚨 Advanced Error Handling System
+## Advanced Error Handling System (NEW)
 
 ### Line & Column Precision with Visual Context
 
@@ -215,7 +215,7 @@ Athena provides **exact error locations** with line and column numbers, plus vis
 ```
 Error: Parse error at line 8, column 1: Missing 'END SERVICE' statement
    |
- 8 | # Missing END SERVICE statement  
+ 8 | # Missing END SERVICE statement
    | ^ Error here
 
 Suggestion: Each SERVICE block must be closed with 'END SERVICE'
@@ -225,8 +225,8 @@ Suggestion: Each SERVICE block must be closed with 'END SERVICE'
 ```
 Error: Parse error at line 7, column 20: Invalid port mapping format
    |
- 7 | PORT-MAPPING 8080 INVALID_FORMAT 80
-   |                    ^ Error here
+ 7 | PORT-MAPPING 8080 : 80
+   |                   ^ Error here
 
 Suggestion: Use PORT-MAPPING <host_port> TO <container_port> format, e.g., PORT-MAPPING 8080 TO 80
 ```
@@ -235,7 +235,7 @@ Suggestion: Use PORT-MAPPING <host_port> TO <container_port> format, e.g., PORT-
 
 **1. Syntax Errors (Parse Errors):**
 - Missing keywords (END SERVICE, DEPLOYMENT-ID)
-- Invalid formats (port mappings, environment variables)  
+- Invalid formats (port mappings, environment variables)
 - Malformed structures (unclosed blocks, missing sections)
 
 **2. Validation Errors:**
@@ -257,7 +257,7 @@ SERVICE frontend
 PORT-MAPPING 8080 TO 80
 END SERVICE
 
-SERVICE backend  
+SERVICE backend
 PORT-MAPPING 8080 TO 3000  # Conflict!
 END SERVICE
 
@@ -301,7 +301,7 @@ Suggestion: Available services: database, frontend. Check the service name in yo
 - **No partial generation**: Docker Compose files are only created when validation passes completely
 - **Clear error flow**: Users see exactly what needs to be fixed before proceeding
 
-## 🏷️ Metadata and Labels
+## Metadata and Labels
 
 ### Automatic Label Generation
 
@@ -310,7 +310,7 @@ Every service gets comprehensive metadata labels:
 ```yaml
 labels:
   athena.project: PROJECT_NAME       # Project identification
-  athena.service: service_name       # Service identification  
+  athena.service: service_name       # Service identification
   athena.type: webapp               # Auto-detected type
   athena.generated: 2025-09-13      # Generation date
 ```
@@ -330,7 +330,7 @@ docker ps --filter "label=athena.type=database" -q | xargs docker stop
 docker ps --filter "label=athena.project=MY_PROJECT" -q | xargs docker rm
 ```
 
-## 🌐 Network Optimization
+## Network Optimization
 
 ### Automatic Network Configuration
 
@@ -356,7 +356,7 @@ services:
     networks:
       - ecommerce_net      # ← Automatic assignment
   database:
-    networks:  
+    networks:
       - ecommerce_net      # ← Consistent across all services
 ```
 
@@ -367,7 +367,7 @@ services:
 - **Performance**: Optimized bridge networking
 - **Scalability**: Easy service addition without configuration
 
-## 🔧 Resource Management
+## Resource Management (In Progress)
 
 ### Intelligent Resource Defaults
 
@@ -401,19 +401,9 @@ deploy:
     window: 120s          # Restart window
 ```
 
-## 📊 Future Enhancements
+## Future Enhancements
 
 ### Planned Features
-
-**Enhanced Build Support:**
-- Build arguments from environment
-- Multi-stage Dockerfile optimization  
-- Custom build contexts
-
-**Advanced Networking:**
-- Service mesh integration (Istio/Consul)
-- Custom IPAM configuration
-- External network attachments
 
 **Monitoring Integration:**
 - Prometheus metrics endpoints
@@ -434,7 +424,7 @@ deploy:
 
 **Target Metrics:**
 - Parse time: <0.5ms (50% improvement)
-- Generation time: <1ms (50% improvement)  
+- Generation time: <1ms (50% improvement)
 - Memory usage: <1MB (50% reduction)
 - File size: Support 100+ service compositions
 
