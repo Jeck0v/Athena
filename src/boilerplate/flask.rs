@@ -122,7 +122,7 @@ impl FlaskGenerator {
                 write_file(base_path.join("app/database/connection.py"), &postgres_connection)?;
             }
             _ => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "Unsupported database type for Flask".to_string()
                 ));
             }
@@ -141,7 +141,7 @@ impl FlaskGenerator {
         let user_model = match config.database {
             DatabaseType::MySQL => replace_template_vars_string(USER_MODEL_MYSQL, &vars),
             DatabaseType::PostgreSQL => replace_template_vars_string(USER_MODEL, &vars),
-            _ => return Err(crate::athena::AthenaError::ValidationError(
+            _ => return Err(crate::athena::AthenaError::validation_error_simple(
                 "Unsupported database type for Flask".to_string()
             )),
         };
@@ -176,7 +176,7 @@ impl FlaskGenerator {
         let requirements = match config.database {
             DatabaseType::MySQL => REQUIREMENTS_TXT_MYSQL,
             DatabaseType::PostgreSQL => REQUIREMENTS_TXT,
-            _ => return Err(crate::athena::AthenaError::ValidationError(
+            _ => return Err(crate::athena::AthenaError::validation_error_simple(
                 "Unsupported database type for Flask".to_string()
             )),
         };
@@ -186,7 +186,7 @@ impl FlaskGenerator {
         let dockerfile_template = match config.database {
             DatabaseType::MySQL => DOCKERFILE_MYSQL,
             DatabaseType::PostgreSQL => DOCKERFILE,
-            _ => return Err(crate::athena::AthenaError::ValidationError(
+            _ => return Err(crate::athena::AthenaError::validation_error_simple(
                 "Unsupported database type for Flask".to_string()
             )),
         };
@@ -197,7 +197,7 @@ impl FlaskGenerator {
         let compose_template = match config.database {
             DatabaseType::MySQL => DOCKER_COMPOSE_YML_MYSQL,
             DatabaseType::PostgreSQL => DOCKER_COMPOSE_YML,
-            _ => return Err(crate::athena::AthenaError::ValidationError(
+            _ => return Err(crate::athena::AthenaError::validation_error_simple(
                 "Unsupported database type for Flask".to_string()
             )),
         };
@@ -259,7 +259,7 @@ JWT_REFRESH_TOKEN_EXPIRES=2592000
 # CORS
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 "#, names.snake_case),
-            _ => return Err(crate::athena::AthenaError::ValidationError(
+            _ => return Err(crate::athena::AthenaError::validation_error_simple(
                 "Unsupported database type for Flask".to_string()
             )),
         };

@@ -2,7 +2,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
 
-use crate::athena::error::{AthenaError, AthenaResult};
+use crate::athena::error::{AthenaError, AthenaResult, EnhancedParseError};
 use super::ast::*;
 
 #[derive(Parser)]
@@ -12,9 +12,25 @@ pub struct AthenaParser;
 pub fn parse_athena_file(input: &str) -> AthenaResult<AthenaFile> {
     let pairs = AthenaParser::parse(Rule::athena_file, input)
         .map_err(|e| {
-            // Provide better error context
-            let error_msg = format!("Syntax error: {}", e);
-            AthenaError::ParseError(error_msg)
+            // Extract location information from Pest error
+            let (line, column) = match &e.location {
+                pest::error::InputLocation::Pos(pos) => {
+                    let line_col = pest::Position::new(input, *pos)
+                        .map(|p| (p.line_col().0, p.line_col().1))
+                        .unwrap_or((1, 1));
+                    line_col
+                }
+                pest::error::InputLocation::Span((start, _)) => {
+                    let line_col = pest::Position::new(input, *start)
+                        .map(|p| (p.line_col().0, p.line_col().1))
+                        .unwrap_or((1, 1));
+                    line_col
+                }
+            };
+            
+            // Create enhanced error with context and suggestions
+            let enhanced_error = create_enhanced_parse_error(&e, line, column, input);
+            AthenaError::parse_error_enhanced(enhanced_error)
         })?;
 
     let mut athena_file = AthenaFile::new();
@@ -34,15 +50,14 @@ pub fn parse_athena_file(input: &str) -> AthenaResult<AthenaFile> {
                             athena_file.services = parse_services_section(inner_pair)?;
                         }
                         Rule::EOI => {} // End of input
-                        _ => return Err(AthenaError::ParseError(format!(
-                            "Unexpected rule: {:?}", 
-                            inner_pair.as_rule()
-                        ))),
+                        _ => return Err(AthenaError::ParseError(
+                            EnhancedParseError::new(format!("Unexpected rule: {:?}", inner_pair.as_rule()))
+                        )),
                     }
                 }
             }
             _ => return Err(AthenaError::ParseError(
-                "Expected athena_file rule".to_string()
+                EnhancedParseError::new("Expected athena_file rule".to_string())
             )),
         }
     }
@@ -71,7 +86,7 @@ fn parse_deployment_section(pair: pest::iterators::Pair<Rule>) -> AthenaResult<D
     }
 
     let deployment_id = deployment_id.ok_or_else(|| 
-        AthenaError::ParseError("Missing deployment ID".to_string())
+        AthenaError::ParseError(EnhancedParseError::new("Missing deployment ID".to_string()))
     )?;
 
     Ok(DeploymentSection {
@@ -143,7 +158,7 @@ fn parse_volume_definition(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Vo
     }
 
     let name = name.ok_or_else(|| 
-        AthenaError::ParseError("Missing volume name".to_string())
+        AthenaError::ParseError(EnhancedParseError::new("Missing volume name".to_string()))
     )?;
 
     Ok(VolumeDefinition { name, options })
@@ -180,7 +195,7 @@ fn parse_service(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Service> {
     }
 
     let service_name = service_name.ok_or_else(|| 
-        AthenaError::ParseError("Missing service name".to_string())
+        AthenaError::ParseError(EnhancedParseError::new("Missing service name".to_string()))
     )?;
 
     service.name = service_name;
@@ -234,22 +249,22 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
 fn parse_port_mapping(pair: pest::iterators::Pair<Rule>) -> AthenaResult<PortMapping> {
     let mut inner = pair.into_inner();
     let host_port = inner.next()
-        .ok_or_else(|| AthenaError::ParseError("Missing host port".to_string()))?
+        .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing host port".to_string())))?
         .as_str()
         .parse::<u16>()
-        .map_err(|_| AthenaError::ParseError("Invalid host port".to_string()))?;
+        .map_err(|_| AthenaError::ParseError(EnhancedParseError::new("Invalid host port".to_string())))?;
 
     let container_port = inner.next()
-        .ok_or_else(|| AthenaError::ParseError("Missing container port".to_string()))?
+        .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing container port".to_string())))?
         .as_str()
         .parse::<u16>()
-        .map_err(|_| AthenaError::ParseError("Invalid container port".to_string()))?;
+        .map_err(|_| AthenaError::ParseError(EnhancedParseError::new("Invalid container port".to_string())))?;
 
     let mut protocol = Protocol::Tcp;
     if let Some(protocol_pair) = inner.next() {
         if let Rule::port_protocol = protocol_pair.as_rule() {
             let proto_str = protocol_pair.into_inner().next()
-                .ok_or_else(|| AthenaError::ParseError("Missing protocol".to_string()))?
+                .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing protocol".to_string())))?
                 .as_str();
             protocol = match proto_str {
                 "tcp" => Protocol::Tcp,
@@ -268,7 +283,7 @@ fn parse_port_mapping(pair: pest::iterators::Pair<Rule>) -> AthenaResult<PortMap
 
 fn parse_env_variable(pair: pest::iterators::Pair<Rule>) -> AthenaResult<EnvironmentVariable> {
     let inner = pair.into_inner().next()
-        .ok_or_else(|| AthenaError::ParseError("Missing environment variable".to_string()))?;
+        .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing environment variable".to_string())))?;
 
     match inner.as_rule() {
         Rule::template_var => {
@@ -278,7 +293,7 @@ fn parse_env_variable(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Environ
         Rule::string_value => {
             Ok(EnvironmentVariable::Literal(clean_string_value(inner.as_str())))
         }
-        _ => Err(AthenaError::ParseError("Invalid environment variable".to_string()))
+        _ => Err(AthenaError::ParseError(EnhancedParseError::new("Invalid environment variable".to_string())))
     }
 }
 
@@ -286,13 +301,13 @@ fn parse_volume_mapping(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Volum
     let mut inner = pair.into_inner();
     let host_path = clean_string_value(
         inner.next()
-            .ok_or_else(|| AthenaError::ParseError("Missing host path".to_string()))?
+            .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing host path".to_string())))?
             .as_str()
     );
 
     let container_path = clean_string_value(
         inner.next()
-            .ok_or_else(|| AthenaError::ParseError("Missing container path".to_string()))?
+            .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing container path".to_string())))?
             .as_str()
     );
 
@@ -317,7 +332,7 @@ fn parse_volume_mapping(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Volum
 fn parse_restart_policy(pair: pest::iterators::Pair<Rule>) -> AthenaResult<RestartPolicy> {
     let mut inner = pair.into_inner();
     let policy_str = inner.next()
-        .ok_or_else(|| AthenaError::ParseError("Missing restart policy".to_string()))?
+        .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing restart policy".to_string())))?
         .as_str();
 
     match policy_str {
@@ -325,7 +340,7 @@ fn parse_restart_policy(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Resta
         "unless-stopped" => Ok(RestartPolicy::UnlessStopped),
         "on-failure" => Ok(RestartPolicy::OnFailure),
         "no" => Ok(RestartPolicy::No),
-        _ => Err(AthenaError::ParseError(format!("Invalid restart policy: {}", policy_str)))
+        _ => Err(AthenaError::ParseError(EnhancedParseError::new(format!("Invalid restart policy: {}", policy_str))))
     }
 }
 
@@ -335,9 +350,9 @@ fn parse_resource_limits(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Reso
     // The grammar expects: "CPU" string_value "MEMORY" string_value
     // But pest parses only the string values, skipping keywords
     if inner_pairs.len() != 2 {
-        return Err(AthenaError::ParseError(
+        return Err(AthenaError::ParseError(EnhancedParseError::new(
             format!("Expected 2 values for resource limits, got {}", inner_pairs.len())
-        ));
+        )));
     }
     
     // First string_value is CPU, second is MEMORY
@@ -352,6 +367,122 @@ fn clean_string_value(input: &str) -> String {
         input[1..input.len()-1].to_string()
     } else {
         input.to_string()
+    }
+}
+
+fn create_enhanced_parse_error(
+    pest_error: &pest::error::Error<Rule>,
+    line: usize,
+    column: usize,
+    file_content: &str,
+) -> EnhancedParseError {
+    let base_message = format!("{}", pest_error);
+    
+    // Extract meaningful error message from Pest error
+    let (clean_message, suggestion) = match &pest_error.variant {
+        pest::error::ErrorVariant::ParsingError { 
+            positives, 
+            negatives: _ 
+        } => {
+            if positives.contains(&Rule::athena_file) {
+                (
+                    "Invalid file structure".to_string(),
+                    Some("Expected DEPLOYMENT-ID followed by SERVICES SECTION".to_string())
+                )
+            } else if positives.contains(&Rule::service) {
+                (
+                    "Expected service definition".to_string(),
+                    Some("Service blocks must start with 'SERVICE <name>' and end with 'END SERVICE'".to_string())
+                )
+            } else if positives.contains(&Rule::service_name) {
+                (
+                    "Missing service name".to_string(),
+                    Some("Add a service name after 'SERVICE', e.g., 'SERVICE backend'".to_string())
+                )
+            } else if positives.contains(&Rule::image_id) {
+                (
+                    "Invalid IMAGE-ID format".to_string(),
+                    Some("Use IMAGE-ID \"image:tag\" format, e.g., IMAGE-ID \"nginx:alpine\"".to_string())
+                )
+            } else if positives.contains(&Rule::port_mapping) {
+                (
+                    "Invalid port mapping format".to_string(),
+                    Some("Use PORT-MAPPING <host_port> TO <container_port> format, e.g., PORT-MAPPING 8080 TO 80".to_string())
+                )
+            } else if positives.contains(&Rule::env_variable) {
+                (
+                    "Invalid environment variable format".to_string(),
+                    Some("Use ENV-VARIABLE {{VAR_NAME}} for templates or ENV-VARIABLE \"literal_value\" for literals".to_string())
+                )
+            } else if positives.contains(&Rule::restart_policy) {
+                (
+                    "Invalid restart policy".to_string(),
+                    Some("Valid restart policies: always, unless-stopped, on-failure, no".to_string())
+                )
+            } else if positives.contains(&Rule::resource_limits) {
+                (
+                    "Invalid resource limits format".to_string(),
+                    Some("Use RESOURCE-LIMITS CPU \"0.5\" MEMORY \"512M\" format".to_string())
+                )
+            } else {
+                // Check for common missing END SERVICE error
+                if base_message.contains("end of input") || base_message.contains("EOI") {
+                    (
+                        "Missing 'END SERVICE' statement".to_string(),
+                        Some("Each SERVICE block must be closed with 'END SERVICE'".to_string())
+                    )
+                } else {
+                    (
+                        extract_clean_message(&base_message),
+                        generate_generic_suggestion(&positives)
+                    )
+                }
+            }
+        }
+        pest::error::ErrorVariant::CustomError { message } => {
+            (message.clone(), None)
+        }
+    };
+    
+    EnhancedParseError::new(clean_message)
+        .with_location(line, column)
+        .with_file_content(file_content.to_string())
+        .with_suggestion(suggestion.unwrap_or_else(|| "Check the syntax in your .ath file".to_string()))
+}
+
+fn extract_clean_message(pest_message: &str) -> String {
+    // Remove technical Pest details and make message user-friendly
+    if pest_message.contains("expected") {
+        let parts: Vec<&str> = pest_message.split(" --> ").collect();
+        if let Some(first_part) = parts.first() {
+            return first_part.trim().to_string();
+        }
+    }
+    
+    pest_message.to_string()
+}
+
+fn generate_generic_suggestion(expected_rules: &[Rule]) -> Option<String> {
+    if expected_rules.is_empty() {
+        return None;
+    }
+    
+    let suggestions: Vec<String> = expected_rules.iter().filter_map(|rule| {
+        match rule {
+            Rule::deployment_id => Some("Add DEPLOYMENT-ID <project_name>".to_string()),
+            Rule::services_section => Some("Add SERVICES SECTION block".to_string()),
+            Rule::service => Some("Define services with SERVICE <name> ... END SERVICE".to_string()),
+            Rule::image_id => Some("Add IMAGE-ID \"image:tag\"".to_string()),
+            Rule::port_mapping => Some("Add PORT-MAPPING <host_port> TO <container_port>".to_string()),
+            Rule::env_variable => Some("Add ENV-VARIABLE {{VAR_NAME}}".to_string()),
+            _ => None,
+        }
+    }).collect();
+    
+    if suggestions.is_empty() {
+        None
+    } else {
+        Some(format!("Try: {}", suggestions.join(" or ")))
     }
 }
 

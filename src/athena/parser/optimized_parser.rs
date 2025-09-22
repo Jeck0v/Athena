@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::athena::error::{AthenaError, AthenaResult};
+use crate::athena::error::{AthenaError, AthenaResult, EnhancedParseError, EnhancedValidationError, ValidationErrorType};
 use super::ast::*;
 
 /// Optimized parser with performance improvements and better error handling
@@ -27,16 +27,16 @@ impl OptimizedParser {
         let trimmed = input.trim();
         
         if trimmed.is_empty() {
-            return Err(AthenaError::ParseError(
+            return Err(AthenaError::ParseError(EnhancedParseError::new(
                 "Input file is empty. Please provide a valid .ath file with at least a SERVICES SECTION.".to_string()
-            ));
+            )));
         }
         
         // Check for required SERVICES SECTION
         if !trimmed.contains("SERVICES SECTION") {
-            return Err(AthenaError::ParseError(
+            return Err(AthenaError::ParseError(EnhancedParseError::new(
                 "Missing required 'SERVICES SECTION'. Every .ath file must contain at least one service definition.".to_string()
-            ));
+            )));
         }
         
         // Check for balanced SERVICE/END SERVICE blocks
@@ -44,20 +44,20 @@ impl OptimizedParser {
         let end_service_count = trimmed.matches("END SERVICE").count();
         
         if service_count != end_service_count {
-            return Err(AthenaError::ParseError(
+            return Err(AthenaError::ParseError(EnhancedParseError::new(
                 format!(
                     "Unbalanced SERVICE blocks: found {} 'SERVICE' declarations but {} 'END SERVICE' statements. \
                      Each SERVICE block must be closed with 'END SERVICE'.",
                     service_count, end_service_count
                 )
-            ));
+            )));
         }
         
         // Check for empty service names
         if trimmed.contains("SERVICE \n") || trimmed.contains("SERVICE\n") {
-            return Err(AthenaError::ParseError(
+            return Err(AthenaError::ParseError(EnhancedParseError::new(
                 "Empty service name detected. Each SERVICE declaration must be followed by a service name.".to_string()
-            ));
+            )));
         }
         
         Ok(())
@@ -101,9 +101,10 @@ impl OptimizedParser {
             
             for dep in &service.depends_on {
                 if !service_map.contains_key(dep) {
-                    return Err(AthenaError::ValidationError(
-                        format!("Service '{}' depends on '{}' which doesn't exist", name, dep)
-                    ));
+                    return Err(AthenaError::ValidationError(EnhancedValidationError::new(
+                        format!("Service '{}' depends on '{}' which doesn't exist", name, dep),
+                        ValidationErrorType::ServiceReference
+                    )));
                 }
             }
         }
@@ -137,9 +138,10 @@ impl OptimizedParser {
         }
         
         if sorted_services.len() != service_map.len() + sorted_services.len() {
-            return Err(AthenaError::ValidationError(
-                "Circular dependency detected in services".to_string()
-            ));
+            return Err(AthenaError::ValidationError(EnhancedValidationError::new(
+                "Circular dependency detected in services".to_string(),
+                ValidationErrorType::CircularDependency
+            )));
         }
         
         Ok(sorted_services)
@@ -247,21 +249,21 @@ impl OptimizedParser {
             
             // Check for malformed directives
             if trimmed.starts_with("SERVICE") && !trimmed.contains(' ') && trimmed != "SERVICE" {
-                return Err(AthenaError::ParseError(
+                return Err(AthenaError::ParseError(EnhancedParseError::new(
                     format!("Line {}: SERVICE directive requires a service name", line_num)
-                ));
+                )));
             }
             
             if trimmed.contains("PORT-MAPPING") && !trimmed.contains("TO") {
-                return Err(AthenaError::ParseError(
+                return Err(AthenaError::ParseError(EnhancedParseError::new(
                     format!("Line {}: PORT-MAPPING requires 'TO' keyword (e.g., 'PORT-MAPPING 8080 TO 80')", line_num)
-                ));
+                )));
             }
             
             if trimmed.contains("VOLUME-MAPPING") && !trimmed.contains("TO") {
-                return Err(AthenaError::ParseError(
+                return Err(AthenaError::ParseError(EnhancedParseError::new(
                     format!("Line {}: VOLUME-MAPPING requires 'TO' keyword", line_num)
-                ));
+                )));
             }
         }
         

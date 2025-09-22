@@ -28,13 +28,13 @@ fn main() {
             },
             athena::AthenaError::ParseError(ref msg) => {
                 eprintln!("Check the syntax of your .ath file. Use 'athena info --examples' for syntax examples.");
-                if msg.contains("Parse error") {
+                if msg.message.contains("Parse error") {
                     eprintln!("Common issues: missing END SERVICE, incorrect keywords, or malformed strings.");
                 }
             },
             athena::AthenaError::ValidationError(ref msg) => {
                 eprintln!("Fix the validation issues in your configuration.");
-                if msg.contains("circular") {
+                if msg.message.contains("circular") {
                     eprintln!("Review your service dependencies to avoid circular references.");
                 }
             },

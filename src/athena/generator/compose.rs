@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::athena::error::{AthenaError, AthenaResult};
+use crate::athena::error::{AthenaError, AthenaResult, EnhancedValidationError, ValidationErrorType};
 use crate::athena::parser::ast::*;
 use super::defaults::{DefaultsEngine, EnhancedDockerService};
 
@@ -134,8 +134,13 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
     for (service_name, service) in &compose.services {
         // Image or build validation - service must have at least one
         if service.image.is_none() && service.build.is_none() {
-            return Err(AthenaError::ValidationError(
-                format!("Service '{}' is missing both image and build configuration", service_name)
+            return Err(AthenaError::validation_error_enhanced(
+                EnhancedValidationError::new(
+                    format!("Service '{}' is missing both image and build configuration", service_name),
+                    ValidationErrorType::MissingConfiguration
+                )
+                .with_suggestion("Add IMAGE-ID \"image:tag\" or ensure a Dockerfile exists in the current directory".to_string())
+                .with_services(vec![service_name.clone()])
             ));
         }
 
@@ -143,13 +148,9 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
         if let Some(deps) = &service.depends_on {
             for dep in deps {
                 if !service_names.contains(dep) {
-                    return Err(AthenaError::ValidationError(
-                        format!(
-                            "Service '{}' depends on '{}' which doesn't exist. Available services: {}", 
-                            service_name, 
-                            dep,
-                            service_names.iter().cloned().collect::<Vec<_>>().join(", ")
-                        )
+                    let available: Vec<String> = service_names.iter().cloned().collect();
+                    return Err(AthenaError::validation_error_enhanced(
+                        EnhancedValidationError::service_reference(service_name, dep, &available)
                     ));
                 }
             }
@@ -159,8 +160,13 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
         if let Some(ports) = &service.ports {
             for port_mapping in ports {
                 if !is_valid_port_mapping(port_mapping) {
-                    return Err(AthenaError::ValidationError(
-                        format!("Service '{}' has invalid port mapping: {}", service_name, port_mapping)
+                    return Err(AthenaError::validation_error_enhanced(
+                        EnhancedValidationError::new(
+                            format!("Service '{}' has invalid port mapping: {}", service_name, port_mapping),
+                            ValidationErrorType::InvalidFormat
+                        )
+                        .with_suggestion("Use format: PORT-MAPPING <host_port> TO <container_port>, e.g., PORT-MAPPING 8080 TO 80".to_string())
+                        .with_services(vec![service_name.clone()])
                     ));
                 }
             }
@@ -210,12 +216,8 @@ fn detect_circular_dependencies_optimized(compose: &DockerCompose) -> AthenaResu
     for service_name in compose.services.keys() {
         if !visited.contains(service_name) {
             if has_cycle_iterative(service_name, compose, &mut visited, &mut temp_visited)? {
-                return Err(AthenaError::ValidationError(
-                    format!(
-                        "Circular dependency detected involving service '{}'. \
-                         Check the DEPENDS-ON declarations in your .ath file.", 
-                        service_name
-                    )
+                return Err(AthenaError::validation_error_enhanced(
+                    EnhancedValidationError::circular_dependency(service_name)
                 ));
             }
         }
@@ -292,14 +294,8 @@ fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
     // Check for conflicts
     for (port, services) in port_to_services {
         if services.len() > 1 {
-            return Err(AthenaError::ValidationError(
-                format!(
-                    "Port conflict detected! Host port {} is used by multiple services: {}. \
-                     Each service must use a unique host port. Consider using different ports like: {}",
-                    port,
-                    services.join(", "),
-                    generate_port_suggestions(&port, services.len())
-                )
+            return Err(AthenaError::validation_error_enhanced(
+                EnhancedValidationError::port_conflict(&port, services)
             ));
         }
     }

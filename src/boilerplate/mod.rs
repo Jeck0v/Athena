@@ -71,17 +71,17 @@ pub fn generate_go_project(config: &ProjectConfig) -> BoilerplateResult<()> {
 /// Validate project name
 pub fn validate_project_name(name: &str) -> BoilerplateResult<()> {
     if name.is_empty() {
-        return Err(AthenaError::ValidationError("Project name cannot be empty".to_string()));
+        return Err(AthenaError::validation_error_simple("Project name cannot be empty".to_string()));
     }
     
     if !name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
-        return Err(AthenaError::ValidationError(
+        return Err(AthenaError::validation_error_simple(
             "Project name can only contain alphanumeric characters, underscores, and hyphens".to_string()
         ));
     }
     
     if name.len() > 50 {
-        return Err(AthenaError::ValidationError("Project name must be 50 characters or less".to_string()));
+        return Err(AthenaError::validation_error_simple("Project name must be 50 characters or less".to_string()));
     }
     
     Ok(())
@@ -90,7 +90,7 @@ pub fn validate_project_name(name: &str) -> BoilerplateResult<()> {
 /// Check if directory already exists
 pub fn check_directory_availability(path: &Path) -> BoilerplateResult<()> {
     if path.exists() {
-        return Err(AthenaError::ValidationError(
+        return Err(AthenaError::validation_error_simple(
             format!("Directory '{}' already exists", path.display())
         ));
     }

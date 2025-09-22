@@ -77,7 +77,7 @@ impl FastAPIGenerator {
                 config_content = config_content.replace("{{/if}}", "");
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -400,7 +400,7 @@ def get_engine():
                 write_file(base_path.join("app/database/connection.py"), postgres_connection)?;
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -417,7 +417,7 @@ def get_engine():
         
         let user_model = match config.database {
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -512,7 +512,7 @@ class UserResponse(BaseModel):
         
         let user_service = match config.database {
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -653,7 +653,7 @@ class UserService:
                 requirements = requirements.replace("{{/if}}", "");
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
@@ -679,7 +679,7 @@ class UserService:
                 compose_content = compose_content.replace("{{/if}}", "");
             }
             DatabaseType::MySQL => {
-                return Err(crate::athena::AthenaError::ValidationError(
+                return Err(crate::athena::AthenaError::validation_error_simple(
                     "MySQL is not supported for FastAPI projects. Use Flask for MySQL support.".to_string()
                 ));
             }
