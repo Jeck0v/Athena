@@ -1,0 +1,26 @@
+FROM node:18-alpine
+
+# Build arguments
+ARG NODE_ENV=production
+ARG PORT=3000
+ARG NODE_VERSION=18
+ARG BUILD_ENV
+ARG BUILD_VERSION="1.0.0"
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=${NODE_ENV}
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE ${PORT}
+
+# Start the application
+CMD ["npm", "start"]

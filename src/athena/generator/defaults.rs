@@ -230,9 +230,15 @@ impl DefaultsEngine {
         let service_type = Self::detect_service_type(service);
         let defaults = Self::get_defaults_for_type(service_type);
         
+        let build_config = Self::create_build_config(service, project_name);
         let mut enhanced_service = EnhancedDockerService {
-            image: service.image.clone(),
-            build: Self::create_build_config(service, project_name),
+            // If we have build config with args, don't use image (build takes precedence)
+            image: if build_config.is_some() && service.build_args.is_some() { 
+                None 
+            } else { 
+                service.image.clone() 
+            },
+            build: build_config,
             container_name: Some(format!("{}_{}", project_name, service.name)),
             ports: Self::convert_ports(&service.ports),
             environment: Self::convert_environment(&service.environment),
@@ -261,12 +267,12 @@ impl DefaultsEngine {
     
     /// Create build configuration - prefer Dockerfile over image when no image is specified
     fn create_build_config(service: &Service, _project_name: &str) -> Option<BuildConfig> {
-        // If no image is specified, use Dockerfile by default (90% use case)
-        if service.image.is_none() {
+        // If no image is specified OR if build_args are provided, use build configuration
+        if service.image.is_none() || service.build_args.is_some() {
             Some(BuildConfig {
                 context: ".".to_string(), // Current directory
                 dockerfile: Some("Dockerfile".to_string()), // Default Dockerfile name
-                args: None, // Could be extended later for build args
+                args: service.build_args.clone(), // Include build args from service
             })
         } else {
             None // Use image instead of build
@@ -438,5 +444,52 @@ mod tests {
         assert_eq!(enhanced.networks, vec!["test_network"]);
         assert!(enhanced.labels.is_some());
         assert!(enhanced.ports.is_some());
+    }
+
+    #[test]
+    fn test_build_args_service_creation() {
+        let mut service = Service::new("api".to_string());
+        let mut build_args = HashMap::new();
+        build_args.insert("NODE_VERSION".to_string(), "20".to_string());
+        build_args.insert("BUILD_ENV".to_string(), "production".to_string());
+        service.build_args = Some(build_args.clone());
+        
+        let enhanced = DefaultsEngine::create_enhanced_service(
+            &service, 
+            "test_network", 
+            "test_project"
+        );
+        
+        // Should use build instead of image when build_args are provided
+        assert!(enhanced.image.is_none());
+        assert!(enhanced.build.is_some());
+        
+        let build_config = enhanced.build.unwrap();
+        assert_eq!(build_config.context, ".");
+        assert_eq!(build_config.dockerfile, Some("Dockerfile".to_string()));
+        assert_eq!(build_config.args, Some(build_args));
+    }
+
+    #[test]
+    fn test_build_args_with_image_uses_build() {
+        let mut service = Service::new("api".to_string());
+        service.image = Some("node:18".to_string());
+        
+        let mut build_args = HashMap::new();
+        build_args.insert("NODE_ENV".to_string(), "development".to_string());
+        service.build_args = Some(build_args.clone());
+        
+        let enhanced = DefaultsEngine::create_enhanced_service(
+            &service, 
+            "test_network", 
+            "test_project"
+        );
+        
+        // Build args should take precedence over image
+        assert!(enhanced.image.is_none());
+        assert!(enhanced.build.is_some());
+        
+        let build_config = enhanced.build.unwrap();
+        assert_eq!(build_config.args, Some(build_args));
     }
 }
