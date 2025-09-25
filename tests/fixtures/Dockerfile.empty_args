@@ -1,0 +1,9 @@
+FROM alpine:latest
+
+# No ARG declarations in this Dockerfile
+
+RUN apk add --no-cache curl
+
+EXPOSE 8080
+
+CMD ["echo", "Hello World"]

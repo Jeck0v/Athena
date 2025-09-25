@@ -43,7 +43,7 @@ webapp:
     athena.type: generic    # ← Generic type for Dockerfile services
 ```
 
-## ⚡ Performance Optimizations
+## Performance Optimizations
 
 ### Topological Service Sorting
 
@@ -96,11 +96,11 @@ services:
 
 **Removed Deprecated Fields:**
 ```yaml
-# ❌ Old format (deprecated)
+# Old format (deprecated)
 version: '3.8'
 services: ...
 
-# ✅ New format (Athena generates)
+# New format (Athena generates)
 services: ...
 name: PROJECT_NAME
 ```
@@ -139,13 +139,14 @@ services:
       athena.generated: 2025-09-13     # Generation timestamp
 ```
 
-### Dockerfile-First Approach
+### Dockerfile-First Approach with Build Arguments
 
-When no `IMAGE-ID` is specified, Athena automatically configures Docker build:
+When no `IMAGE-ID` is specified, Athena automatically configures Docker build with full build arguments support:
 
 **DSL Input:**
-```cobol
+```athena
 SERVICE api
+BUILD-ARGS NODE_ENV="production" API_VERSION="v2.0" DATABASE_POOL_SIZE="20"
 PORT-MAPPING 8000 TO 8000
 ENV-VARIABLE {{API_KEY}}
 END SERVICE
@@ -157,23 +158,24 @@ api:
   build:
     context: .              # Current directory
     dockerfile: Dockerfile  # Standard Dockerfile name
-    # args: {}             # Future: build arguments support
-  # ... rest of configuration
-```
-
-**Advanced Build Configuration (Future):**
-```yaml
-# Future enhancement - build arguments
-api:
-  build:
-    context: .
-    dockerfile: Dockerfile
     args:
-      BUILD_ENV: production
-      NODE_VERSION: 18
+      NODE_ENV: production
+      API_VERSION: v2.0
+      DATABASE_POOL_SIZE: "20"
+  ports:
+    - "8000:8000"
+  environment:
+    - API_KEY=${API_KEY}
+  # ... rest of configuration with intelligent defaults
 ```
 
-## 🔍 Enhanced Validation System
+**Build Arguments Features:**
+- **Type Safety**: All build args are properly quoted in YAML output
+- **Environment Integration**: Build args work seamlessly with environment variables
+- **Multi-Stage Support**: Perfect for multi-stage Dockerfile builds
+- **Development/Production**: Easy switching between build configurations
+
+## Enhanced Validation System
 
 ### Circular Dependency Detection
 
@@ -367,7 +369,7 @@ services:
 - **Performance**: Optimized bridge networking
 - **Scalability**: Easy service addition without configuration
 
-## Resource Management (In Progress)
+## Resource Management (New)
 
 ### Intelligent Resource Defaults
 
@@ -399,6 +401,71 @@ deploy:
     delay: 5s             # Backoff on failures
     max_attempts: 3       # Prevent infinite restart loops
     window: 120s          # Restart window
+```
+
+## Architecture Examples
+
+Athena provides comprehensive examples demonstrating various architectural patterns:
+
+### Available Architecture Templates
+
+**1. Microservices Architecture (`examples/microservices.ath`)**
+- Complete e-commerce microservices stack
+- API Gateway with multiple specialized services
+- Individual databases per service
+- Message queuing with RabbitMQ
+- Search with Elasticsearch
+- Monitoring with Prometheus/Grafana
+- Build arguments for different environments
+
+**2. Monolithic Architecture (`examples/monolithic.ath`)**
+- Traditional single-application deployment
+- Reverse proxy with SSL termination
+- Background worker processes
+- Shared database and caching
+- Production-ready configuration
+
+**3. Three-Tier Web Application (`examples/three-tier.ath`)**
+- Separated presentation, business, and data layers
+- Frontend with React build arguments
+- API server with Spring Boot configuration
+- Dedicated cache and storage layers
+- Load balancing and SSL support
+
+**4. Event-Driven Architecture (`examples/event-driven.ath`)**
+- Apache Kafka event streaming platform
+- Multiple event processors in different languages
+- Real-time analytics with Elasticsearch
+- Scalable message processing
+- Event monitoring and management UI
+
+**5. Full-Stack Web Application (`examples/fullstack-web.ath`)**
+- Complete web application stack
+- Frontend, API, WebSocket, and background workers
+- File storage with MinIO S3-compatible service
+- Full-text search capabilities
+- Comprehensive monitoring and visualization
+
+### Build Arguments in Examples
+
+All examples demonstrate the new BUILD-ARGS feature:
+```athena
+SERVICE user_service
+BUILD-ARGS NODE_ENV="production" API_VERSION="v2.0" DATABASE_POOL_SIZE="20"
+# ... service configuration
+END SERVICE
+```
+
+### Usage Examples
+
+```bash
+# Generate from any architecture example
+athena build examples/microservices.ath
+athena build examples/monolithic.ath -o my-stack.yml
+athena build examples/event-driven.ath
+
+# Validate architecture before generation
+athena validate examples/fullstack-web.ath
 ```
 
 ## Future Enhancements
@@ -435,4 +502,4 @@ deploy:
 
 ---
 
-This documentation covers the current advanced features and planned enhancements for Athena's intelligent Docker Compose generation system.
+This documentation covers the current advanced features and planned enhancements for Athena's intelligent generation system.

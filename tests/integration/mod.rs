@@ -5,3 +5,6 @@ pub mod error_handling_test;
 pub mod enhanced_error_handling_test;
 pub mod boilerplate;
 pub mod structural;
+
+// BUILD-ARGS feature tests
+pub mod build_args_cli_tests;

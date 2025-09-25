@@ -6,6 +6,7 @@ use crate::athena::error::{
     AthenaError, AthenaResult, EnhancedValidationError, ValidationErrorType,
 };
 use crate::athena::parser::ast::*;
+use crate::athena::dockerfile::{analyze_dockerfile, validate_build_args_against_dockerfile};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerCompose {
@@ -88,7 +89,7 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     }
 
     // Fast validation with enhanced error reporting
-    validate_compose_enhanced(&compose)?;
+    validate_compose_enhanced(&compose, athena_file)?;
 
     // Generate optimized YAML
     let yaml = serde_yaml::to_string(&compose).map_err(AthenaError::YamlError)?;
@@ -126,7 +127,7 @@ fn create_optimized_volumes(volume_defs: &[VolumeDefinition]) -> HashMap<String,
 }
 
 /// Enhanced validation with better error reporting and performance
-fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
+fn validate_compose_enhanced(compose: &DockerCompose, athena_file: &AthenaFile) -> AthenaResult<()> {
     // Pre-allocate for better performance
     let service_names: std::collections::HashSet<String> =
         compose.services.keys().cloned().collect();
@@ -179,6 +180,9 @@ fn validate_compose_enhanced(compose: &DockerCompose) -> AthenaResult<()> {
 
     // Detect port conflicts between services
     detect_port_conflicts(compose)?;
+
+    // Advanced validation: BUILD-ARGS vs Dockerfile ARGs
+    validate_dockerfile_build_args(athena_file)?;
 
     Ok(())
 }
@@ -339,6 +343,57 @@ fn generate_port_suggestions(base_port: &str, count: usize) -> String {
     } else {
         "8080, 8081, 8082".to_string() // fallback suggestions
     }
+}
+
+/// Validate BUILD-ARGS against Dockerfile ARGs (intelligent validation)
+fn validate_dockerfile_build_args(athena_file: &AthenaFile) -> AthenaResult<()> {
+    // Check each service that has build_args
+    for service in &athena_file.services.services {
+        if let Some(build_args) = &service.build_args {
+            // Try to find and analyze the Dockerfile
+            let dockerfile_path = "Dockerfile"; // Default path
+            
+            match analyze_dockerfile(dockerfile_path) {
+                Ok(dockerfile_analysis) => {
+                    // Validate BUILD-ARGS against Dockerfile ARGs
+                    match validate_build_args_against_dockerfile(build_args, &dockerfile_analysis) {
+                        Ok(warnings) => {
+                            // For now, we treat warnings as validation errors
+                            // In the future, we could make this configurable
+                            if !warnings.is_empty() {
+                                let combined_warning = warnings.join("\n\n");
+                                return Err(AthenaError::validation_error_enhanced(
+                                    EnhancedValidationError::new(
+                                        format!(
+                                            "BUILD-ARGS validation failed for service '{}':\n\n{}",
+                                            service.name, combined_warning
+                                        ),
+                                        ValidationErrorType::InvalidFormat,
+                                    )
+                                    .with_suggestion(
+                                        "Ensure all BUILD-ARGS correspond to ARG declarations in your Dockerfile".to_string()
+                                    )
+                                    .with_services(vec![service.name.clone()])
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            // Validation process failed, but we don't want to block builds
+                            eprintln!("Warning: Could not validate BUILD-ARGS for service '{}': {}", service.name, e);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Dockerfile not found or not readable
+                    // This is OK - just skip validation for this service
+                    // We could add a warning here in verbose mode
+                    continue;
+                }
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 /// Improve YAML formatting for better readability by adding blank lines between services
