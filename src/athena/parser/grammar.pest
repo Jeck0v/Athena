@@ -31,7 +31,8 @@ service_item = {
     depends_on |
     health_check |
     restart_policy |
-    resource_limits
+    resource_limits |
+    build_args
 }
 
 // Service directives
@@ -44,6 +45,8 @@ depends_on = { "DEPENDS-ON" ~ identifier }
 health_check = { "HEALTH-CHECK" ~ string_value }
 restart_policy = { "RESTART-POLICY" ~ restart_value }
 resource_limits = { "RESOURCE-LIMITS" ~ "CPU" ~ string_value ~ "MEMORY" ~ string_value }
+build_args = { "BUILD-ARGS" ~ build_arg_pair+ }
+build_arg_pair = { identifier ~ "=" ~ string_value }
 
 // Base types
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }

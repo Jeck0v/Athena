@@ -44,6 +44,7 @@ pub struct Service {
     pub health_check: Option<String>,
     pub restart: Option<RestartPolicy>,
     pub resources: Option<ResourceLimits>,
+    pub build_args: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +128,7 @@ impl Service {
             health_check: None,
             restart: None,
             resources: None,
+            build_args: None,
         }
     }
 }

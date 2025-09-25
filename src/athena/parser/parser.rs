@@ -240,6 +240,9 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
             Rule::resource_limits => {
                 service.resources = Some(parse_resource_limits(inner_pair)?);
             }
+            Rule::build_args => {
+                service.build_args = Some(parse_build_args(inner_pair)?);
+            }
             _ => {}
         }
     }
@@ -362,6 +365,34 @@ fn parse_resource_limits(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Reso
     Ok(ResourceLimits { cpu, memory })
 }
 
+fn parse_build_args(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap<String, String>> {
+    let mut build_args = HashMap::new();
+    
+    for inner_pair in pair.into_inner() {
+        if let Rule::build_arg_pair = inner_pair.as_rule() {
+            let mut arg_parts = inner_pair.into_inner();
+            
+            let key = arg_parts.next()
+                .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing build arg key".to_string())))?
+                .as_str().to_string();
+            
+            let value = arg_parts.next()
+                .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing build arg value".to_string())))?
+                .as_str();
+            
+            build_args.insert(key, clean_string_value(value));
+        }
+    }
+    
+    if build_args.is_empty() {
+        return Err(AthenaError::ParseError(EnhancedParseError::new(
+            "BUILD-ARGS must contain at least one key=value pair".to_string()
+        )));
+    }
+    
+    Ok(build_args)
+}
+
 fn clean_string_value(input: &str) -> String {
     if input.starts_with('"') && input.ends_with('"') {
         input[1..input.len()-1].to_string()
@@ -423,6 +454,11 @@ fn create_enhanced_parse_error(
                 (
                     "Invalid resource limits format".to_string(),
                     Some("Use RESOURCE-LIMITS CPU \"0.5\" MEMORY \"512M\" format".to_string())
+                )
+            } else if positives.contains(&Rule::build_args) {
+                (
+                    "Invalid BUILD-ARGS format".to_string(),
+                    Some("Use BUILD-ARGS KEY=\"value\" KEY2=\"value2\" format, e.g., BUILD-ARGS NODE_VERSION=\"20\" BUILD_ENV=\"production\"".to_string())
                 )
             } else {
                 // Check for common missing END SERVICE error
@@ -547,6 +583,75 @@ mod tests {
             Err(e) => {
                 println!("Grammar parse error: {:?}", e);
             }
+        }
+    }
+
+    #[test]
+    fn test_build_args_parsing() {
+        let input = r#"
+            DEPLOYMENT-ID TEST_PROJECT
+            
+            SERVICES SECTION
+            
+            SERVICE api
+            BUILD-ARGS BUILD_ENV="production" NODE_VERSION="20"
+            ENV-VARIABLE {{API_KEY}}
+            END SERVICE
+        "#;
+
+        let result = parse_athena_file(input);
+        assert!(result.is_ok());
+
+        let athena_file = result.unwrap();
+        assert_eq!(athena_file.services.services.len(), 1);
+        
+        let service = &athena_file.services.services[0];
+        assert_eq!(service.name, "api");
+        assert!(service.build_args.is_some());
+        
+        let build_args = service.build_args.as_ref().unwrap();
+        assert_eq!(build_args.get("BUILD_ENV"), Some(&"production".to_string()));
+        assert_eq!(build_args.get("NODE_VERSION"), Some(&"20".to_string()));
+        assert_eq!(build_args.len(), 2);
+    }
+
+    #[test]
+    fn test_build_args_single_pair() {
+        let input = r#"BUILD-ARGS NODE_ENV="development""#;
+        
+        match AthenaParser::parse(Rule::build_args, input) {
+            Ok(mut pairs) => {
+                if let Some(pair) = pairs.next() {
+                    let result = parse_build_args(pair);
+                    assert!(result.is_ok());
+                    
+                    let build_args = result.unwrap();
+                    assert_eq!(build_args.get("NODE_ENV"), Some(&"development".to_string()));
+                    assert_eq!(build_args.len(), 1);
+                }
+            }
+            Err(e) => panic!("Parse error: {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_build_args_multiple_pairs() {
+        let input = r#"BUILD-ARGS ENV="prod" VERSION="1.2.3" DEBUG="false""#;
+        
+        match AthenaParser::parse(Rule::build_args, input) {
+            Ok(mut pairs) => {
+                if let Some(pair) = pairs.next() {
+                    let result = parse_build_args(pair);
+                    assert!(result.is_ok());
+                    
+                    let build_args = result.unwrap();
+                    assert_eq!(build_args.get("ENV"), Some(&"prod".to_string()));
+                    assert_eq!(build_args.get("VERSION"), Some(&"1.2.3".to_string()));
+                    assert_eq!(build_args.get("DEBUG"), Some(&"false".to_string()));
+                    assert_eq!(build_args.len(), 3);
+                }
+            }
+            Err(e) => panic!("Parse error: {:?}", e),
         }
     }
 }
