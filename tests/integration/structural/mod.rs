@@ -10,6 +10,7 @@ pub mod networking;
 pub mod policies;
 pub mod formatting;
 pub mod complex_scenarios;
+pub mod comments;
 
 /// Create a test .ath file with given content
 pub fn create_test_ath_file(temp_dir: &TempDir, filename: &str, content: &str) -> String {

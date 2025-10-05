@@ -1,0 +1,36 @@
+// Single-line comment at the start
+DEPLOYMENT-ID COMMENTS_TEST
+VERSION-ID 1.0.0
+
+/* 
+ * Multi-line comment block
+ * describing the project setup
+ */
+
+ENVIRONMENT SECTION
+NETWORK-NAME comments_network  // Inline comment
+
+SERVICES SECTION
+
+// Web server service
+SERVICE web
+IMAGE-ID "nginx:alpine"  // Using Alpine for smaller size
+PORT-MAPPING 80 TO 80    // HTTP port
+/*
+ * This service serves static content
+ * and acts as a reverse proxy
+ */
+DEPENDS-ON api
+RESTART-POLICY unless-stopped  // Restart policy
+END SERVICE
+
+SERVICE api
+// API service configuration
+IMAGE-ID "python:3.11"
+PORT-MAPPING 8000 TO 8000
+ENV-VARIABLE {{API_KEY}}       // API key environment variable
+ENV-VARIABLE {{DATABASE_URL}}  // Database connection
+RESTART-POLICY always          /* Always restart API */
+END SERVICE
+
+// End of configuration

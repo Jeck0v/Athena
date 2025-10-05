@@ -96,7 +96,7 @@ Affected services: app1, app2
 Suggestion: Use different host ports, e.g., 8080, 8081
 ```
 
-**[📖 Learn more about Enhanced Error Handling →](docs/ERROR_HANDLING.md)**
+**[Learn more about Enhanced Error Handling →](docs/ERROR_HANDLING.md)**
 
 ## Quick Start
 
@@ -142,7 +142,7 @@ athena init go my-service --framework gin --with-mongodb
 
 ## Key Features
 
-### 🚨 Enhanced Error Handling System (New!)
+### Enhanced Error Handling System (New!)
 - **Line & Column Precision** => Exact error locations with visual context
 - **Intelligent Suggestions** => Automatic recommendations for common fixes
 - **Advanced Validation** => Port conflicts, service references, circular dependencies
@@ -173,10 +173,17 @@ athena init go my-service --framework gin --with-mongodb
 - Flask + PostgreSQL =>  Modern Python web development
 - Docker ready => Multi-stage builds, Nginx reverse proxy included
 
+### Syntax Highlighting (New!)
+- **Beautiful DSL highlighting** for `.ath` files with customizable colors
+- **Zed editor extension** ready to install in `syntax-highlighting/`
+- **Smart color coding** for keywords, directives, template variables, and more
+- **Easy customization** via `colors.json` make it your own!
+
 ## Documentation
 
 ### Core Documentation
 - [Enhanced Error Handling (**New**)](docs/ERROR_HANDLING.md) - Complete guide to Athena's advanced error system.
+- [Syntax Highlighting (**New**)](syntax-highlighting/README.md) - Beautiful colors for `.ath` files in Zed editor.
 - [Installation Guide](docs/INSTALLATION.md)
 - [Docker Compose Generator Usage](docs/DSL_REFERENCE.md)
 - [Boilerplate Project Generator](docs/BOILERPLATE.md)
@@ -209,50 +216,6 @@ athena init go my-service --framework echo --with-postgresql
 # Flask projects
 athena init flask my-app --with-postgresql
 ```
-
-## Complete Example: Modern Web Application
-
-The `presentation.ath` file demonstrates **all Athena features** in a production-ready web application:
-
-```athena
-DEPLOYMENT-ID MODERN_WEB_APP
-VERSION-ID 1.0.0
-
-ENVIRONMENT SECTION
-NETWORK-NAME modern_app_network
-
-SERVICES SECTION
-
-SERVICE nginx_proxy
-IMAGE-ID "nginx:alpine"
-PORT-MAPPING 80 TO 80
-DEPENDS-ON backend
-END SERVICE
-
-SERVICE backend
-PORT-MAPPING 3000 TO 3000
-ENV-VARIABLE {{NODE_ENV}}
-DEPENDS-ON mongodb
-END SERVICE
-
-SERVICE mongodb
-IMAGE-ID "mongo:7.0"
-PORT-MAPPING 27017 TO 27017
-RESTART-POLICY always
-END SERVICE
-```
-
-**Generated Configuration Highlights:**
-
-- **Automatic Dockerfile Detection**: Backend service gets `build.dockerfile: Dockerfile`
-- **Service Type Detection**: MongoDB → Database type with optimized settings
-- **Custom Network**: All services connected to `modern_app_network`
-- **Smart Labels**: Project tracking and metadata automatically added
-- **Dependency Ordering**: Services sorted automatically (mongodb → backend → nginx)
-- **Health Checks**: Type-specific intervals and commands
-
-This **65-line configuration** generates a **220+ line** production-ready Docker Compose file with all best practices included!
-
 ## What Athena Adds Automatically
 
 - Smart service detection (Database, Cache, WebApp, Proxy)
@@ -265,16 +228,16 @@ This **65-line configuration** generates a **220+ line** production-ready Docker
 - Dockerfile integration when no image specified
 - Dependency ordering with topological sort
 
-## License
-
-This project is licensed under the MIT License see the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - **Pest** for powerful parsing capabilities
 - **Clap** for excellent CLI framework
 - **Docker Community** for container standards
 - **Rust Community** for the amazing ecosystem
+
+## License
+
+This project is licensed under the MIT License see the [LICENSE](LICENSE) file for details.
 
 ---
 

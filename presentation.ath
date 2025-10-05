@@ -1,73 +1,106 @@
-DEPLOYMENT-ID MODERN_WEB_APP
-VERSION-ID 1.0.0
+// Modern E-commerce Platform - Production-ready with enhanced features
+DEPLOYMENT-ID MODERN_ECOMMERCE
+VERSION-ID 2.0.0
 
 ENVIRONMENT SECTION
-NETWORK-NAME modern_app_network
+NETWORK-NAME ecommerce_network
+// TODO: In Swarm mode, network will use overlay driver automatically
+// For now: bridge driver (compose), overlay driver (swarm deploy)
+// Define persistent volumes for production
+VOLUME postgres_data
+VOLUME redis_data
+// Secrets management for production
+SECRET jwt_secret "use Docker secrets in production"
+SECRET postgres_password "use Docker secrets in production"
 
 SERVICES SECTION
 
-SERVICE nginx_proxy
+// Reverse proxy with SSL termination - Only exposed service in production
+SERVICE nginx_reverse_proxy
 IMAGE-ID "nginx:alpine"
 PORT-MAPPING 80 TO 80
 PORT-MAPPING 443 TO 443
 VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
-VOLUME-MAPPING "./nginx/ssl" TO "/etc/nginx/ssl" (ro)
-DEPENDS-ON backend
-RESTART-POLICY always
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+DEPENDS-ON api_gateway
 HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
+// Athena auto-applies: restart=always for proxy type
 END SERVICE
 
-SERVICE backend
-PORT-MAPPING 3000 TO 3000
-ENV-VARIABLE {{NODE_ENV}}
+// API Gateway - Internal only, stateless and scalable
+SERVICE api_gateway
+BUILD-ARGS NODE_ENV="production" API_VERSION="v2.1" JWT_EXPIRY="24h"
+// No PORT-MAPPING for production - only internal network access
 ENV-VARIABLE {{JWT_SECRET}}
-ENV-VARIABLE {{MONGODB_URI}}
-ENV-VARIABLE {{API_PORT}}
-COMMAND "npm start"
-DEPENDS-ON mongodb
-RESTART-POLICY unless-stopped
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
 RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
-HEALTH-CHECK "curl -f http://localhost:3000/api/health || exit 1"
+DEPENDS-ON database
+DEPENDS-ON cache
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+// Athena auto-applies: restart=unless-stopped for webapp type
+// TODO: Add replicas: 3 for load balancing when Athena supports it
 END SERVICE
 
-SERVICE mongodb
-IMAGE-ID "mongo:7.0"
-PORT-MAPPING 27017 TO 27017
-ENV-VARIABLE {{MONGO_INITDB_ROOT_USERNAME}}
-ENV-VARIABLE {{MONGO_INITDB_ROOT_PASSWORD}}
-ENV-VARIABLE {{MONGO_INITDB_DATABASE}}
-VOLUME-MAPPING "./data/mongodb" TO "/data/db"
-VOLUME-MAPPING "./mongo-init" TO "/docker-entrypoint-initdb.d" (ro)
-RESTART-POLICY always
-RESOURCE-LIMITS CPU "0.7" MEMORY "1024M"
-HEALTH-CHECK "mongosh --eval 'db.adminCommand(ping)' || exit 1"
-END SERVICE
-
-SERVICE redis_cache
-IMAGE-ID "redis:7-alpine"
-PORT-MAPPING 6379 TO 6379
-VOLUME-MAPPING "./data/redis" TO "/data"
-COMMAND "redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru"
-RESTART-POLICY always
+// Product catalog service - Stateless, horizontally scalable
+SERVICE product_service
+BUILD-ARGS CATALOG_VERSION="v1.5" SEARCH_ENGINE="elasticsearch"
+// No PORT-MAPPING for production - internal access only
+ENV-VARIABLE {{DATABASE_URL}}
 RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
-HEALTH-CHECK "redis-cli ping || exit 1"
+DEPENDS-ON database
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+// TODO: Add replicas: 2 for high availability when Athena supports it
 END SERVICE
 
+// User authentication service - Stateless, scalable microservice
+SERVICE auth_service
+BUILD-ARGS AUTH_PROVIDER="oauth2" SESSION_TIMEOUT="1h"
+// No PORT-MAPPING for production - internal access only
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{DATABASE_URL}}
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+DEPENDS-ON database
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+// TODO: Add replicas: 2 for authentication redundancy when Athena supports it
+END SERVICE
+
+// Main database - PRODUCTION: No external ports, internal network only
+SERVICE database
+IMAGE-ID "postgres:15"
+// No PORT-MAPPING in production - internal network communication only
+// Use 'docker exec' or port forwarding for debugging if needed
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+// Using named volume for production persistence
+VOLUME-MAPPING "postgres_data" TO "/var/lib/postgresql/data"
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+HEALTH-CHECK "pg_isready -U ${POSTGRES_USER} || exit 1"
+// Athena auto-applies: restart=always for database type
+// TODO: Add replicas: 1 for database (single master) when Athena supports it
+END SERVICE
+
+// Redis cache - PRODUCTION: No external ports, internal network only
+SERVICE cache
+IMAGE-ID "redis:7-alpine"
+/* No PORT-MAPPING in production - internal network communication only
+Use 'docker exec' or port forwarding for debugging if needed
+Using named volume for production persistence */
+VOLUME-MAPPING "redis_data" TO "/data"
+RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
+HEALTH-CHECK "redis-cli ping || exit 1"
+// Athena auto-applies: restart=always for cache type
+// TODO: Add replicas: 1 for cache (single instance) when Athena supports it
+END SERVICE
+
+// Monitoring service - Independent scraping configuration
 SERVICE monitoring
 IMAGE-ID "prom/prometheus:latest"
 PORT-MAPPING 9090 TO 9090
-VOLUME-MAPPING "./monitoring/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
-VOLUME-MAPPING "./data/prometheus" TO "/prometheus"
-DEPENDS-ON backend
-RESTART-POLICY always
+VOLUME-MAPPING "./prometheus/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
+// No DEPENDS-ON - Prometheus handles service discovery and scraping independently
+// Configure prometheus.yml to scrape targets via service names
 RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
-END SERVICE
-
-SERVICE logs_collector
-IMAGE-ID "fluent/fluent-bit:latest"
-VOLUME-MAPPING "./fluent-bit/fluent-bit.conf" TO "/fluent-bit/etc/fluent-bit.conf" (ro)
-VOLUME-MAPPING "/var/log" TO "/var/log" (ro)
-DEPENDS-ON backend
-RESTART-POLICY unless-stopped
-RESOURCE-LIMITS CPU "0.2" MEMORY "128M"
+// TODO: Add replicas: 2 for HA monitoring when Athena supports it
 END SERVICE
