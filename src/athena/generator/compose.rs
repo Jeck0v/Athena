@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::defaults::{DefaultsEngine, EnhancedDockerService};
+use crate::athena::dockerfile::{analyze_dockerfile, validate_build_args_against_dockerfile};
 use crate::athena::error::{
     AthenaError, AthenaResult, EnhancedValidationError, ValidationErrorType,
 };
 use crate::athena::parser::ast::*;
-use crate::athena::dockerfile::{analyze_dockerfile, validate_build_args_against_dockerfile};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerCompose {
@@ -127,7 +127,10 @@ fn create_optimized_volumes(volume_defs: &[VolumeDefinition]) -> HashMap<String,
 }
 
 /// Enhanced validation with better error reporting and performance
-fn validate_compose_enhanced(compose: &DockerCompose, athena_file: &AthenaFile) -> AthenaResult<()> {
+fn validate_compose_enhanced(
+    compose: &DockerCompose,
+    athena_file: &AthenaFile,
+) -> AthenaResult<()> {
     // Pre-allocate for better performance
     let service_names: std::collections::HashSet<String> =
         compose.services.keys().cloned().collect();
@@ -352,7 +355,7 @@ fn validate_dockerfile_build_args(athena_file: &AthenaFile) -> AthenaResult<()> 
         if let Some(build_args) = &service.build_args {
             // Try to find and analyze the Dockerfile
             let dockerfile_path = "Dockerfile"; // Default path
-            
+
             match analyze_dockerfile(dockerfile_path) {
                 Ok(dockerfile_analysis) => {
                     // Validate BUILD-ARGS against Dockerfile ARGs
@@ -379,7 +382,10 @@ fn validate_dockerfile_build_args(athena_file: &AthenaFile) -> AthenaResult<()> 
                         }
                         Err(e) => {
                             // Validation process failed, but we don't want to block builds
-                            eprintln!("Warning: Could not validate BUILD-ARGS for service '{}': {}", service.name, e);
+                            eprintln!(
+                                "Warning: Could not validate BUILD-ARGS for service '{}': {}",
+                                service.name, e
+                            );
                         }
                     }
                 }
@@ -392,7 +398,7 @@ fn validate_dockerfile_build_args(athena_file: &AthenaFile) -> AthenaResult<()> 
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -446,7 +452,7 @@ fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String 
         env!("CARGO_PKG_VERSION"),
         athena_file.get_project_name()
     ));
-    result.push_str("# Developed by UNFAIR Team\n");
+    result.push_str("# Developed by UNFAIR Team: https://github.com/Jeck0v/Athena \n");
 
     if let Some(deployment) = &athena_file.deployment {
         if let Some(version) = &deployment.version_id {
@@ -459,7 +465,9 @@ fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String 
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
     ));
 
-    result.push_str("# Features: Intelligent defaults, optimized networking, enhanced health checks\n\n");
+    result.push_str(
+        "# Features: Intelligent defaults, optimized networking, enhanced health checks\n\n",
+    );
 
     // Add service count and optimization info
     let service_count = athena_file.services.services.len();

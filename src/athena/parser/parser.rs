@@ -461,8 +461,15 @@ fn create_enhanced_parse_error(
                     Some("Use BUILD-ARGS KEY=\"value\" KEY2=\"value2\" format, e.g., BUILD-ARGS NODE_VERSION=\"20\" BUILD_ENV=\"production\"".to_string())
                 )
             } else {
+                // Check for unclosed comment errors
+                if file_content.contains("/*") && file_content.matches("/*").count() != file_content.matches("*/").count() {
+                    (
+                        "Unclosed multi-line comment".to_string(),
+                        Some("Multi-line comments must be closed with '*/'. Each '/*' must have a matching '*/'".to_string())
+                    )
+                }
                 // Check for common missing END SERVICE error
-                if base_message.contains("end of input") || base_message.contains("EOI") {
+                else if base_message.contains("end of input") || base_message.contains("EOI") {
                     (
                         "Missing 'END SERVICE' statement".to_string(),
                         Some("Each SERVICE block must be closed with 'END SERVICE'".to_string())

@@ -1,5 +1,9 @@
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
-COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
+COMMENT = _{ 
+    line_comment | block_comment 
+}
+line_comment = _{ "//" ~ (!"\n" ~ ANY)* }
+block_comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
 athena_file = { SOI ~ deployment_section? ~ environment_section? ~ services_section ~ EOI }
 

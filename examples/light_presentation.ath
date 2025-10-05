@@ -1,0 +1,94 @@
+// Modern E-commerce Platform - Demo/Testing Version with Exposed Ports
+DEPLOYMENT-ID MODERN_ECOMMERCE_DEMO
+VERSION-ID 2.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME ecommerce_network
+// Define persistent volumes for testing
+VOLUME postgres_data
+VOLUME redis_data
+
+SERVICES SECTION
+
+// Reverse proxy with SSL termination - Main entry point
+SERVICE nginx_reverse_proxy
+IMAGE-ID "nginx:alpine"
+PORT-MAPPING 80 TO 80
+PORT-MAPPING 443 TO 443
+VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+DEPENDS-ON api_gateway
+HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
+// Athena auto-applies: restart=always for proxy type
+END SERVICE
+
+// API Gateway - Accessible for testing
+SERVICE api_gateway
+BUILD-ARGS NODE_ENV="development" API_VERSION="v2.1" JWT_EXPIRY="24h"
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{DATABASE_URL}}
+ENV-VARIABLE {{REDIS_URL}}
+RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+DEPENDS-ON database
+DEPENDS-ON cache
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+// Athena auto-applies: restart=unless-stopped for webapp type
+END SERVICE
+
+// Product catalog service - Exposed for direct testing
+SERVICE product_service  
+BUILD-ARGS CATALOG_VERSION="v1.5" SEARCH_ENGINE="elasticsearch"
+PORT-MAPPING 3001 TO 3000
+ENV-VARIABLE {{DATABASE_URL}}
+RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
+DEPENDS-ON database
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+END SERVICE
+
+// User authentication service - Exposed for API testing
+SERVICE auth_service
+BUILD-ARGS AUTH_PROVIDER="oauth2" SESSION_TIMEOUT="1h"
+PORT-MAPPING 3002 TO 3000  
+ENV-VARIABLE {{JWT_SECRET}}
+ENV-VARIABLE {{DATABASE_URL}}
+RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+DEPENDS-ON database
+HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
+END SERVICE
+
+// Main database - Exposed for database tools/debugging
+SERVICE database
+IMAGE-ID "postgres:15"
+PORT-MAPPING 5432 TO 5432
+ENV-VARIABLE {{POSTGRES_USER}}
+ENV-VARIABLE {{POSTGRES_PASSWORD}}
+ENV-VARIABLE {{POSTGRES_DB}}
+// Using named volume for persistence
+VOLUME-MAPPING "postgres_data" TO "/var/lib/postgresql/data"
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+HEALTH-CHECK "pg_isready -U ${POSTGRES_USER} || exit 1"
+// Athena auto-applies: restart=always for database type
+END SERVICE
+
+// Redis cache - Exposed for Redis tools/monitoring
+SERVICE cache
+IMAGE-ID "redis:7-alpine"
+PORT-MAPPING 6379 TO 6379
+// Using named volume for persistence
+VOLUME-MAPPING "redis_data" TO "/data"
+RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
+HEALTH-CHECK "redis-cli ping || exit 1"
+// Athena auto-applies: restart=always for cache type
+END SERVICE
+
+// Monitoring service - Prometheus for observability
+SERVICE monitoring
+IMAGE-ID "prom/prometheus:latest"
+PORT-MAPPING 9090 TO 9090
+VOLUME-MAPPING "./prometheus/prometheus.yml" TO "/etc/prometheus/prometheus.yml" (ro)
+DEPENDS-ON api_gateway
+DEPENDS-ON product_service
+DEPENDS-ON auth_service
+RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
+END SERVICE
