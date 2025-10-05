@@ -156,3 +156,33 @@ END SERVICE
     assert!(yaml["services"]["test"].is_mapping());
     assert_eq!(yaml["services"]["test"]["image"].as_str().unwrap(), "nginx:alpine");
 }
+
+#[test]
+fn test_unclosed_comment_error() {
+    use assert_cmd::Command;
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let content = r#"
+DEPLOYMENT-ID BROKEN_TEST
+
+SERVICES SECTION
+
+SERVICE test
+/* Unclosed comment
+IMAGE-ID "nginx:alpine"
+END SERVICE
+"#;
+    
+    let ath_file = create_test_ath_file(&temp_dir, "test.ath", content);
+    
+    let mut cmd = Command::cargo_bin("athena").expect("Failed to find athena binary");
+    let result = cmd.arg("validate")
+        .arg(&ath_file)
+        .output()
+        .expect("Failed to execute command");
+    
+    // Should fail with specific comment error
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("Unclosed multi-line comment"));
+    assert!(stderr.contains("Multi-line comments must be closed with '*/'"));
+}
