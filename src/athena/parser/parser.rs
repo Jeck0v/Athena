@@ -301,10 +301,25 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
             }
             Rule::swarm_replicas => {
                 if let Some(replicas_pair) = inner_pair.into_inner().next() {
-                    let replicas = replicas_pair.as_str().parse::<u32>()
-                        .map_err(|_| AthenaError::ParseError(
-                            EnhancedParseError::new("Invalid replicas number".to_string())
-                        ))?;
+                    let replicas_str = replicas_pair.as_str();
+                    let (line, column) = replicas_pair.line_col();
+                    
+                    let replicas = replicas_str.parse::<u32>()
+                        .map_err(|_| {
+                            let suggestion = if replicas_str.parse::<i32>().is_ok() && replicas_str.starts_with('-') {
+                                "Replicas must be a positive number. Use a value like: 1, 2, 3, 5, etc.".to_string()
+                            } else if replicas_str.len() > 10 {
+                                "Replicas number is too large. Use a reasonable value like: 1, 2, 3, 5, 10, etc.".to_string()
+                            } else {
+                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 5, 10, etc.", replicas_str)
+                            };
+                            
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid replicas number".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion(suggestion)
+                            )
+                        })?;
                     
                     if service.swarm_config.is_none() {
                         service.swarm_config = Some(SwarmConfig::new());
@@ -478,26 +493,55 @@ fn parse_update_config(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Update
             let option_str = inner_pair.as_str();
             for value_pair in inner_pair.into_inner() {
                 if option_str.starts_with("PARALLELISM") && value_pair.as_rule() == Rule::number {
-                    update_config.parallelism = Some(value_pair.as_str().parse::<u32>()
-                        .map_err(|_| AthenaError::ParseError(
-                            EnhancedParseError::new("Invalid parallelism number".to_string())
-                        ))?);
+                    let parallelism_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.parallelism = Some(parallelism_str.parse::<u32>()
+                        .map_err(|_| {
+                            let suggestion = if parallelism_str.parse::<i32>().is_ok() && parallelism_str.starts_with('-') {
+                                "Parallelism must be a positive number. Use a value like: 1, 2, 3, 4, etc.".to_string()
+                            } else {
+                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 4, etc.", parallelism_str)
+                            };
+                            
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid parallelism number".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion(suggestion)
+                            )
+                        })?);
                 } else if option_str.starts_with("DELAY") && value_pair.as_rule() == Rule::time_value {
                     update_config.delay = Some(value_pair.as_str().to_string());
                 } else if option_str.starts_with("FAILURE-ACTION") && value_pair.as_rule() == Rule::failure_action {
-                    update_config.failure_action = Some(match value_pair.as_str() {
+                    let action_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.failure_action = Some(match action_str {
                         "CONTINUE" => FailureAction::Continue,
                         "PAUSE" => FailureAction::Pause,
                         "ROLLBACK" => FailureAction::Rollback,
-                        _ => FailureAction::Pause,
+                        _ => {
+                            return Err(AthenaError::ParseError(
+                                EnhancedParseError::new(format!("Invalid failure action: {}", action_str))
+                                    .with_location(line, column)
+                                    .with_suggestion("Valid failure actions are: CONTINUE, PAUSE, ROLLBACK".to_string())
+                            ));
+                        }
                     });
                 } else if option_str.starts_with("MONITOR") && value_pair.as_rule() == Rule::time_value {
                     update_config.monitor = Some(value_pair.as_str().to_string());
                 } else if option_str.starts_with("MAX-FAILURE-RATIO") && value_pair.as_rule() == Rule::decimal_value {
-                    update_config.max_failure_ratio = Some(value_pair.as_str().parse::<f32>()
-                        .map_err(|_| AthenaError::ParseError(
-                            EnhancedParseError::new("Invalid max failure ratio".to_string())
-                        ))?);
+                    let ratio_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.max_failure_ratio = Some(ratio_str.parse::<f32>()
+                        .map_err(|_| {
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid max failure ratio".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion("Max failure ratio must be a number between 0.0 and 1.0, e.g., 0.1, 0.3, 0.5".to_string())
+                            )
+                        })?);
                 }
             }
         }
@@ -508,27 +552,42 @@ fn parse_update_config(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Update
 
 fn parse_swarm_labels(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap<String, String>> {
     let mut labels = HashMap::new();
+    let (main_line, main_column) = pair.line_col();
     
     for inner_pair in pair.into_inner() {
         if let Rule::swarm_label_pair = inner_pair.as_rule() {
+            let (line, column) = inner_pair.line_col();
             let mut label_parts = inner_pair.into_inner();
             
-            let key = label_parts.next()
-                .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing label key".to_string())))?
-                .as_str().to_string();
+            let key_pair = label_parts.next()
+                .ok_or_else(|| AthenaError::ParseError(
+                    EnhancedParseError::new("Missing label key".to_string())
+                        .with_location(line, column)
+                        .with_suggestion("Use format: SWARM-LABELS key=value, e.g., SWARM-LABELS environment=\"production\" tier=\"backend\"".to_string())
+                ))?;
+            let key = key_pair.as_str().to_string();
             
-            let value = label_parts.next()
-                .ok_or_else(|| AthenaError::ParseError(EnhancedParseError::new("Missing label value".to_string())))?
-                .as_str();
+            let value_pair = label_parts.next()
+                .ok_or_else(|| {
+                    let (key_line, key_column) = key_pair.line_col();
+                    AthenaError::ParseError(
+                        EnhancedParseError::new(format!("Missing value for label key '{}'", key))
+                            .with_location(key_line, key_column)
+                            .with_suggestion(format!("Complete the label: {}=\"value\", e.g., {}=\"production\"", key, key))
+                    )
+                })?;
+            let value = value_pair.as_str();
             
             labels.insert(key, clean_string_value(value));
         }
     }
     
     if labels.is_empty() {
-        return Err(AthenaError::ParseError(EnhancedParseError::new(
-            "SWARM-LABELS must contain at least one key=value pair".to_string()
-        )));
+        return Err(AthenaError::ParseError(
+            EnhancedParseError::new("SWARM-LABELS must contain at least one key=value pair".to_string())
+                .with_location(main_line, main_column)
+                .with_suggestion("Add at least one label: SWARM-LABELS environment=\"production\" tier=\"backend\"".to_string())
+        ));
     }
     
     Ok(labels)

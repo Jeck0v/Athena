@@ -656,6 +656,58 @@ END SERVICE
 | `PAUSE` | Stop updates on failure | Manual intervention needed |
 | `ROLLBACK` | Revert to previous version | Automatic recovery |
 
+### Advanced Features
+
+**Comprehensive Error Handling:**
+Athena provides robust validation for all Swarm directives with detailed error messages:
+
+```bash
+# Invalid replica numbers are caught
+REPLICAS -5                    # Error: Invalid replicas number
+REPLICAS 999999999999999999999 # Error: Number too large
+REPLICAS abc                   # Error: Non-numeric value
+
+# Malformed configurations are detected
+SWARM-LABELS environment="production" tier=  # Error: Missing value
+SWARM-LABELS                                 # Error: Empty labels
+UPDATE-CONFIG PARALLELISM -1                # Error: Negative parallelism
+```
+
+**Flexible Label Syntax:**
+```athena
+# Both quoted and unquoted values are supported
+SWARM-LABELS environment="production" tier=backend
+SWARM-LABELS environment=production tier="backend"
+```
+
+**Zero Downtime Deployments:**
+```athena
+SERVICE critical_service
+IMAGE-ID app:latest
+REPLICAS 5
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK MONITOR 60s
+SWARM-LABELS critical="true" environment="production"
+END SERVICE
+```
+
+### Best Practices
+
+**Production Deployment:**
+1. **Always use ROLLBACK** for critical services
+2. **Set appropriate delays** (10-30s) between updates
+3. **Use low parallelism** (1-2) for database services
+4. **Label services** with environment and tier information
+5. **Monitor deployments** with appropriate timeouts
+
+**Development vs Production:**
+```athena
+# Development: Fast updates, higher parallelism
+UPDATE-CONFIG PARALLELISM 3 DELAY 5s FAILURE-ACTION CONTINUE
+
+# Production: Safe updates, lower parallelism
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK MONITOR 60s
+```
+
 ## Future Enhancements
 
 ### Planned Features

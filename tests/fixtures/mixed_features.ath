@@ -1,0 +1,41 @@
+DEPLOYMENT-ID MIXED_FEATURES_TEST
+
+ENVIRONMENT SECTION
+NETWORK-NAME mixed_network DRIVER OVERLAY ATTACHABLE TRUE
+
+SERVICES SECTION
+
+// Traditional Docker Compose service
+SERVICE development_api
+IMAGE-ID node:18
+PORT-MAPPING 3000 TO 3000
+ENV-VARIABLE NODE_ENV="development"
+RESTART-POLICY unless-stopped
+END SERVICE
+
+// Swarm-enabled production service
+SERVICE production_api
+BUILD-ARGS NODE_ENV="production" CLUSTER_MODE="true"
+REPLICAS 5
+UPDATE-CONFIG PARALLELISM 2 DELAY 10s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="api" environment="production" scaling="auto"
+RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+DEPENDS-ON cache
+END SERVICE
+
+// Mixed features service (both Compose and Swarm)
+SERVICE hybrid_service
+IMAGE-ID redis:7-alpine
+PORT-MAPPING 6379 TO 6379
+REPLICAS 3
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s
+SWARM-LABELS tier="cache" environment="production"
+RESTART-POLICY always
+HEALTH-CHECK "redis-cli ping"
+END SERVICE
+
+SERVICE cache
+IMAGE-ID redis:7-alpine
+REPLICAS 2
+SWARM-LABELS tier="cache" role="secondary"
+END SERVICE

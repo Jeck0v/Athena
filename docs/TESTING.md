@@ -14,30 +14,48 @@ Our tests focus on **functionality over format**:
 
 ```
 tests/
+├── integration_tests.rs                # Main integration test entry point
 ├── integration/
-│   ├── cli_commands_test.rs             # Test all CLI commands
-│   ├── docker_compose_generation_test.rs # Full generation test
-│   ├── error_handling_test.rs           # Error case testing
-│   ├── boilerplate/                     # Modular boilerplate tests
-│   │   ├── mod.rs                       # Common utilities and shared functions
-│   │   ├── fastapi_tests.rs             # FastAPI project generation tests
-│   │   ├── flask_tests.rs               # Flask project generation tests
-│   │   ├── go_tests.rs                  # Go project generation tests
-│   │   └── common_tests.rs              # Common init command tests
-│   └── structural/                      # Organized structural tests
-│       ├── mod.rs                       # Common utilities and module declarations
-│       ├── basic_structure.rs           # Basic YAML structure validation
-│       ├── service_configuration.rs     # Service config (env vars, ports, volumes)
-│       ├── networking.rs                # Networks and service dependencies
-│       ├── policies.rs                  # Restart policies and health checks
-│       ├── formatting.rs                # YAML validity and formatting tests
-│       └── complex_scenarios.rs         # Complex microservices scenarios
+│   ├── mod.rs                          # Module declarations and utilities
+│   ├── cli_commands_test.rs            # Test all CLI commands and options
+│   ├── docker_compose_generation_test.rs # Full Docker Compose generation tests
+│   ├── error_handling_test.rs          # Error case testing and validation
+│   ├── enhanced_error_handling_test.rs # Advanced error scenarios with suggestions
+│   ├── build_args_cli_tests.rs         # Dockerfile integration and BUILD-ARGS tests
+│   ├── swarm_features_test.rs          # Docker Swarm support and error handling
+│   ├── boilerplate/                    # Modular boilerplate tests by framework
+│   │   ├── mod.rs                      # Common utilities and shared functions
+│   │   ├── fastapi_tests.rs            # FastAPI project generation tests
+│   │   ├── flask_tests.rs              # Flask project generation tests
+│   │   ├── go_tests.rs                 # Go project generation tests (Gin, Echo, Fiber)
+│   │   └── common_tests.rs             # Common init command tests and validation
+│   └── structural/                     # Organized structural tests (lightweight)
+│       ├── mod.rs                      # Common utilities and module declarations
+│       ├── basic_structure.rs          # Basic YAML structure validation
+│       ├── service_configuration.rs    # Service config (env vars, ports, volumes)
+│       ├── networking.rs               # Networks and service dependencies
+│       ├── policies.rs                 # Restart policies and health checks
+│       ├── formatting.rs               # YAML validity and formatting tests
+│       ├── comments.rs                 # Comment parsing and edge cases
+│       └── complex_scenarios.rs        # Complex microservices scenarios
 ├── fixtures/
-│   ├── valid_simple.ath                # Simple valid .ath file
+│   ├── valid_simple.ath                # Simple valid .ath file (3 services)
 │   ├── valid_complex_microservices.ath # Complex microservices setup
+│   ├── minimal_valid.ath               # Minimal valid configuration
 │   ├── invalid_syntax.ath              # File with syntax errors
-│   ├── circular_dependencies.ath       # Circular dependency test
-│   └── minimal_valid.ath               # Minimal valid configuration
+│   ├── circular_dependencies.ath       # Circular dependency test cases
+│   ├── port_conflicts.ath              # Port conflict scenarios
+│   ├── comments_test.ath               # Comment parsing test cases
+│   ├── build_args_basic.ath            # Basic BUILD-ARGS examples
+│   ├── build_args_complex.ath          # Complex BUILD-ARGS scenarios
+│   ├── build_args_invalid.ath          # Invalid BUILD-ARGS for error testing
+│   ├── build_args_mixed_valid_invalid.ath # Mixed valid/invalid BUILD-ARGS
+│   ├── build_args_multiple_services.ath # Multiple services with BUILD-ARGS
+│   ├── build_args_with_image.ath       # BUILD-ARGS with IMAGE-ID precedence
+│   ├── swarm_basic.ath                 # Basic Docker Swarm features
+│   ├── swarm_advanced.ath              # Advanced Swarm scenarios
+│   ├── swarm_errors.ath                # Swarm error testing base
+│   └── mixed_features.ath              # Mixed Compose + Swarm features
 ```
 
 ## Running Tests
@@ -77,6 +95,15 @@ cargo test --test integration_tests docker_compose_generation_test
 
 # Error handling tests
 cargo test --test integration_tests error_handling_test
+
+# Enhanced error handling tests
+cargo test --test integration_tests enhanced_error_handling_test
+
+# Build args CLI tests
+cargo test --test integration_tests build_args_cli_tests
+
+# Docker Swarm feature tests
+cargo test --test integration_tests swarm_features_test
 
 # Boilerplate generation tests
 cargo test --test integration_tests boilerplate
@@ -141,7 +168,31 @@ cargo test --test integration_tests structural --verbose
 - Tests permission and access errors
 - Validates error message quality
 
-### 4. Boilerplate Generation Tests (`boilerplate/`)
+### 4. Enhanced Error Handling Tests (`enhanced_error_handling_test.rs`)
+- Advanced error scenarios with intelligent suggestions
+- Tests enhanced port conflict detection with multiple services
+- Validates service reference error messages with suggestions
+- Tests validation error improvements
+- Comprehensive error message quality assurance
+
+### 5. Build Args CLI Tests (`build_args_cli_tests.rs`)
+- Tests Dockerfile integration and validation
+- BUILD-ARGS parsing and generation
+- Dockerfile ARG validation against Athena BUILD-ARGS
+- Error handling for missing Dockerfiles
+- Intelligent similarity suggestions for mismatched ARG names
+- Tests precedence of IMAGE-ID over BUILD-ARGS
+
+### 6. Docker Swarm Feature Tests (`swarm_features_test.rs`)
+- Comprehensive Docker Swarm support testing
+- REPLICAS directive validation and error handling
+- UPDATE-CONFIG options testing (PARALLELISM, DELAY, FAILURE-ACTION)
+- SWARM-LABELS parsing with flexible syntax support
+- Overlay network configuration testing
+- Complete integration tests with Swarm + Compose features
+- 13 dedicated error handling tests for edge cases
+
+### 7. Boilerplate Generation Tests (`boilerplate/`)
 - **Modular organization** by framework for better maintainability
 - **FastAPI tests** (`fastapi_tests.rs`): Basic init, PostgreSQL/MongoDB options, Docker/no-Docker modes
 - **Flask tests** (`flask_tests.rs`): Basic init, MySQL integration
@@ -149,7 +200,7 @@ cargo test --test integration_tests structural --verbose
 - **Common tests** (`common_tests.rs`): Error handling, help commands, project validation
 - Tests project structure generation, configuration files, and dependency setup
 
-### 5. Structural Tests (`structural/`)
+### 8. Structural Tests (`structural/`)
 - **Organized by functional categories** for better maintainability
 - **Lightweight YAML validation** without heavy snapshots
 - Tests **structure and logic** rather than exact formatting
@@ -162,6 +213,7 @@ cargo test --test integration_tests structural --verbose
 - `networking.rs`: Network configuration and service dependencies
 - `policies.rs`: Restart policies and health check configurations
 - `formatting.rs`: YAML validity and readable output formatting
+- `comments.rs`: Comment parsing, multi-line comments, and edge cases
 - `complex_scenarios.rs`: Complex microservices architecture tests
 
 ## Test Fixtures
@@ -174,6 +226,24 @@ cargo test --test integration_tests structural --verbose
 ### Invalid Test Files
 - **`invalid_syntax.ath`**: Contains various syntax errors
 - **`circular_dependencies.ath`**: Services with circular dependencies
+- **`port_conflicts.ath`**: Port conflict scenarios for error testing
+
+### BUILD-ARGS Test Files
+- **`build_args_basic.ath`**: Basic BUILD-ARGS examples
+- **`build_args_complex.ath`**: Complex BUILD-ARGS scenarios with multiple services
+- **`build_args_invalid.ath`**: Invalid BUILD-ARGS for error testing
+- **`build_args_mixed_valid_invalid.ath`**: Mixed valid/invalid BUILD-ARGS scenarios
+- **`build_args_multiple_services.ath`**: Multiple services with BUILD-ARGS
+- **`build_args_with_image.ath`**: BUILD-ARGS with IMAGE-ID precedence testing
+
+### Comment Test Files
+- **`comments_test.ath`**: Comment parsing test cases including multi-line and edge cases
+
+### Docker Swarm Test Files
+- **`swarm_basic.ath`**: Basic Docker Swarm features (REPLICAS, UPDATE-CONFIG, SWARM-LABELS)
+- **`swarm_advanced.ath`**: Advanced Swarm scenarios with all options and complex architectures
+- **`swarm_errors.ath`**: Base fixture for Swarm error testing scenarios
+- **`mixed_features.ath`**: Mixed Docker Compose and Swarm features in same deployment
 
 ## Dependencies
 
@@ -257,24 +327,28 @@ Modular boilerplate tests organized by framework, each verifying:
 ### Test Performance & Statistics
 
 **Current test suite:**
-- **Total tests**: 69 integration tests
+- **Total tests**: 117 integration tests
 - **CLI tests**: 13 tests (command parsing, help, validation)
 - **Docker Compose generation**: 11 tests (YAML generation, validation, port conflict detection)
 - **Error handling**: 21 tests (comprehensive error scenarios including port conflicts)
+- **Enhanced error handling**: 6 tests (advanced error scenarios with suggestions)
+- **Build args CLI**: 8 tests (Dockerfile integration and validation)
+- **Swarm features**: 21 tests (Docker Swarm support with comprehensive error handling)
 - **Boilerplate generation**: 14 tests (modular by framework)
-- **Structural tests**: 13 tests (organized in 6 categories)
+- **Structural tests**: 23 tests (organized in 6 categories including comments)
 - **Execution time**: < 1 second for structural tests
 - **Test organization**: Modular structure for easy maintenance
 
 **Test breakdown by category:**
 
 **Structural tests:**
-- `basic_structure.rs`: 2 tests
-- `service_configuration.rs`: 4 tests
-- `networking.rs`: 2 tests
-- `policies.rs`: 2 tests
-- `formatting.rs`: 2 tests
-- `complex_scenarios.rs`: 1 test
+- `basic_structure.rs`: 2 tests (YAML structure, service count validation)
+- `service_configuration.rs`: 4 tests (env vars, ports, volumes, service settings)
+- `networking.rs`: 2 tests (network configuration, service dependencies)
+- `policies.rs`: 2 tests (restart policies, health check configurations)
+- `formatting.rs`: 2 tests (YAML validity, readable output formatting)
+- `comments.rs`: 11 tests (comment parsing, edge cases, multi-line comments)
+- `complex_scenarios.rs`: 1 test (complex microservices architecture)
 
 **Boilerplate tests:**
 - `fastapi_tests.rs`: 6 tests (basic, PostgreSQL, MongoDB, no-Docker, custom directory, help)
@@ -313,8 +387,8 @@ SERVICE service1
 PORT-MAPPING 8080 TO 80
 END SERVICE
 
-SERVICE service2  
-PORT-MAPPING 8080 TO 8000  // ❌ Conflict on host port 8080
+SERVICE service2
+PORT-MAPPING 8080 TO 8000  // Conflict on host port 8080
 END SERVICE
 
 // Valid scenario - should succeed
@@ -323,8 +397,78 @@ PORT-MAPPING 8080 TO 80
 END SERVICE
 
 SERVICE service2
-PORT-MAPPING 8081 TO 8000  // ✅ Different host port
+PORT-MAPPING 8081 TO 8000  // Different host port
 END SERVICE
+```
+
+## Docker Swarm Feature Tests (**NEW**)
+
+### Overview
+As of December 2025, Athena includes comprehensive Docker Swarm support with extensive error handling tests covering all edge cases and invalid configurations.
+
+### Test Coverage (`swarm_features_test.rs`)
+
+#### Success Scenarios (8 tests):
+- **`test_swarm_replicas_parsing`**: Validates REPLICAS directive parsing
+- **`test_swarm_update_config_parsing`**: Tests UPDATE-CONFIG with all options
+- **`test_swarm_labels_parsing`**: Verifies SWARM-LABELS functionality
+- **`test_overlay_network_parsing`**: Tests overlay network configuration
+- **`test_complete_swarm_compose_generation`**: Full integration test
+- **`test_mixed_compose_and_swarm_features`**: Mixed mode compatibility
+- **`test_swarm_labels_without_quotes_should_work`**: Flexible label parsing
+- **`test_conflicting_swarm_and_compose_features`**: Feature coexistence
+
+#### Error Handling Tests (13 tests):
+**Replica Validation:**
+- **`test_invalid_replica_negative_number`**: Catches `REPLICAS -5`
+- **`test_invalid_replica_extremely_large_number`**: Catches overflow numbers
+- **`test_invalid_replica_non_numeric`**: Catches `REPLICAS abc`
+- **`test_invalid_replica_zero`**: Allows zero replicas (edge case)
+
+**UPDATE-CONFIG Validation:**
+- **`test_invalid_update_config_negative_parallelism`**: Catches negative values
+- **`test_invalid_update_config_invalid_delay_format`**: Validates time formats
+- **`test_invalid_failure_action`**: Catches invalid failure actions
+- **`test_invalid_max_failure_ratio`**: Validates ratio bounds
+
+**SWARM-LABELS Validation:**
+- **`test_invalid_swarm_labels_malformed_missing_value`**: Catches missing values
+- **`test_empty_swarm_labels`**: Catches empty label directives
+
+**Network and Service Validation:**
+- **`test_invalid_network_driver`**: Catches invalid network drivers
+- **`test_invalid_boolean_values`**: Validates boolean parameters
+- **`test_swarm_config_without_service_name`**: Catches missing service names
+
+### Key Features Tested
+1. **Comprehensive Error Detection**: All invalid configurations are caught
+2. **Detailed Error Messages**: Specific error messages with line/column info
+3. **Edge Case Handling**: Zero replicas, large numbers, malformed syntax
+4. **Flexible Parsing**: Supports both quoted and unquoted label values
+5. **Integration Testing**: Full Docker Compose generation with Swarm features
+
+### Example Test Scenarios
+```rust
+// Replica validation tests
+fn test_invalid_replica_negative_number() {
+    let input = r#"
+        SERVICE web
+        IMAGE-ID nginx:alpine
+        REPLICAS -5    // Should fail
+        END SERVICE
+    "#;
+    assert!(parse_athena_file(input).is_err());
+}
+
+// Label validation tests
+fn test_invalid_swarm_labels_malformed() {
+    let input = r#"
+        SERVICE web
+        SWARM-LABELS environment="prod" tier=  // Missing value
+        END SERVICE
+    "#;
+    assert!(parse_athena_file(input).is_err());
+}
 ```
 
 ### Coverage Goals
@@ -332,7 +476,9 @@ The test suite aims for >80% coverage on critical code paths:
 - CLI argument parsing
 - .ath file parsing and validation
 - Docker Compose generation
+- Docker Swarm configuration generation
 - Port conflict detection and validation
+- Swarm-specific directive validation
 - Error handling and reporting
 - Project initialization
 
