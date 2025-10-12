@@ -96,42 +96,37 @@ fn parse_deployment_section(pair: pest::iterators::Pair<Rule>) -> AthenaResult<D
 }
 
 fn parse_environment_section(pair: pest::iterators::Pair<Rule>) -> AthenaResult<EnvironmentSection> {
-    let mut network_name = None;
+    let mut networks = Vec::new();
     let mut volumes = Vec::new();
     let mut secrets = HashMap::new();
 
     for inner_pair in pair.into_inner() {
-        match inner_pair.as_rule() {
-            Rule::environment_item => {
-                for item_pair in inner_pair.into_inner() {
-                    match item_pair.as_rule() {
-                        Rule::network_name => {
-                            if let Some(name_pair) = item_pair.into_inner().next() {
-                                network_name = Some(name_pair.as_str().to_string());
-                            }
-                        }
-                        Rule::volume_def => {
-                            volumes.push(parse_volume_definition(item_pair)?);
-                        }
-                        Rule::secret_def => {
-                            let mut inner = item_pair.into_inner();
-                            if let (Some(key), Some(value)) = (inner.next(), inner.next()) {
-                                secrets.insert(
-                                    key.as_str().to_string(),
-                                    clean_string_value(value.as_str())
-                                );
-                            }
-                        }
-                        _ => {}
+        if inner_pair.as_rule() == Rule::environment_item {
+            for item_pair in inner_pair.into_inner() {
+                match item_pair.as_rule() {
+                    Rule::network_name => {
+                        networks.push(parse_network_definition(item_pair)?);
                     }
+                    Rule::volume_def => {
+                        volumes.push(parse_volume_definition(item_pair)?);
+                    }
+                    Rule::secret_def => {
+                        let mut inner = item_pair.into_inner();
+                        if let (Some(key), Some(value)) = (inner.next(), inner.next()) {
+                            secrets.insert(
+                                key.as_str().to_string(),
+                                clean_string_value(value.as_str())
+                            );
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
         }
     }
 
     Ok(EnvironmentSection {
-        network_name,
+        networks,
         volumes,
         secrets,
     })
@@ -162,6 +157,67 @@ fn parse_volume_definition(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Vo
     )?;
 
     Ok(VolumeDefinition { name, options })
+}
+
+fn parse_network_definition(pair: pest::iterators::Pair<Rule>) -> AthenaResult<NetworkDefinition> {
+    let mut name = None;
+    let mut driver = None;
+    let mut attachable = None;
+    let mut encrypted = None;
+    let mut ingress = None;
+
+    for inner_pair in pair.into_inner() {
+        match inner_pair.as_rule() {
+            Rule::identifier => {
+                name = Some(inner_pair.as_str().to_string());
+            }
+            Rule::network_options => {
+                for option_pair in inner_pair.into_inner() {
+                    if let Rule::network_option = option_pair.as_rule() {
+                        let option_str = option_pair.as_str();
+                        for opt_inner in option_pair.into_inner() {
+                            match opt_inner.as_rule() {
+                                Rule::network_driver => {
+                                    driver = Some(match opt_inner.as_str() {
+                                        "BRIDGE" => NetworkDriver::Bridge,
+                                        "OVERLAY" => NetworkDriver::Overlay,
+                                        "HOST" => NetworkDriver::Host,
+                                        "NONE" => NetworkDriver::None,
+                                        _ => NetworkDriver::Bridge,
+                                    });
+                                }
+                                Rule::boolean_value => {
+                                    let bool_val = opt_inner.as_str() == "TRUE";
+                                    // Use the captured option_str to determine context
+                                    if option_str.contains("ATTACHABLE") {
+                                        attachable = Some(bool_val);
+                                    } else if option_str.contains("ENCRYPTED") {
+                                        encrypted = Some(bool_val);
+                                    } else if option_str.contains("INGRESS") {
+                                        ingress = Some(bool_val);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let name = name.ok_or_else(|| 
+        AthenaError::ParseError(EnhancedParseError::new("Missing network name".to_string()))
+    )?;
+
+    Ok(NetworkDefinition {
+        name,
+        driver,
+        attachable,
+        encrypted,
+        ingress,
+    })
 }
 
 fn parse_services_section(pair: pest::iterators::Pair<Rule>) -> AthenaResult<ServicesSection> {
@@ -242,6 +298,42 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
             }
             Rule::build_args => {
                 service.build_args = Some(parse_build_args(inner_pair)?);
+            }
+            Rule::swarm_replicas => {
+                if let Some(replicas_pair) = inner_pair.into_inner().next() {
+                    let replicas_str = replicas_pair.as_str();
+                    let (line, column) = replicas_pair.line_col();
+                    
+                    let replicas = replicas_str.parse::<u32>()
+                        .map_err(|_| {
+                            let suggestion = if replicas_str.parse::<i32>().is_ok() && replicas_str.starts_with('-') {
+                                "Replicas must be a positive number. Use a value like: 1, 2, 3, 5, etc.".to_string()
+                            } else if replicas_str.len() > 10 {
+                                "Replicas number is too large. Use a reasonable value like: 1, 2, 3, 5, 10, etc.".to_string()
+                            } else {
+                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 5, 10, etc.", replicas_str)
+                            };
+                            
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid replicas number".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion(suggestion)
+                            )
+                        })?;
+                    
+                    if service.swarm_config.is_none() {
+                        service.swarm_config = Some(SwarmConfig::new());
+                    }
+                    service.swarm_config.as_mut().unwrap().replicas = Some(replicas);
+                }
+            }
+            Rule::swarm_update_config => {
+                service.swarm_config.get_or_insert_with(SwarmConfig::new)
+                    .update_config = Some(parse_update_config(inner_pair)?);
+            }
+            Rule::swarm_labels => {
+                service.swarm_config.get_or_insert_with(SwarmConfig::new)
+                    .labels = Some(parse_swarm_labels(inner_pair)?);
             }
             _ => {}
         }
@@ -393,6 +485,114 @@ fn parse_build_args(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap<S
     Ok(build_args)
 }
 
+fn parse_update_config(pair: pest::iterators::Pair<Rule>) -> AthenaResult<UpdateConfig> {
+    let mut update_config = UpdateConfig::new();
+    
+    for inner_pair in pair.into_inner() {
+        if let Rule::update_config_options = inner_pair.as_rule() {
+            let option_str = inner_pair.as_str();
+            for value_pair in inner_pair.into_inner() {
+                if option_str.starts_with("PARALLELISM") && value_pair.as_rule() == Rule::number {
+                    let parallelism_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.parallelism = Some(parallelism_str.parse::<u32>()
+                        .map_err(|_| {
+                            let suggestion = if parallelism_str.parse::<i32>().is_ok() && parallelism_str.starts_with('-') {
+                                "Parallelism must be a positive number. Use a value like: 1, 2, 3, 4, etc.".to_string()
+                            } else {
+                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 4, etc.", parallelism_str)
+                            };
+                            
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid parallelism number".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion(suggestion)
+                            )
+                        })?);
+                } else if option_str.starts_with("DELAY") && value_pair.as_rule() == Rule::time_value {
+                    update_config.delay = Some(value_pair.as_str().to_string());
+                } else if option_str.starts_with("FAILURE-ACTION") && value_pair.as_rule() == Rule::failure_action {
+                    let action_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.failure_action = Some(match action_str {
+                        "CONTINUE" => FailureAction::Continue,
+                        "PAUSE" => FailureAction::Pause,
+                        "ROLLBACK" => FailureAction::Rollback,
+                        _ => {
+                            return Err(AthenaError::ParseError(
+                                EnhancedParseError::new(format!("Invalid failure action: {}", action_str))
+                                    .with_location(line, column)
+                                    .with_suggestion("Valid failure actions are: CONTINUE, PAUSE, ROLLBACK".to_string())
+                            ));
+                        }
+                    });
+                } else if option_str.starts_with("MONITOR") && value_pair.as_rule() == Rule::time_value {
+                    update_config.monitor = Some(value_pair.as_str().to_string());
+                } else if option_str.starts_with("MAX-FAILURE-RATIO") && value_pair.as_rule() == Rule::decimal_value {
+                    let ratio_str = value_pair.as_str();
+                    let (line, column) = value_pair.line_col();
+                    
+                    update_config.max_failure_ratio = Some(ratio_str.parse::<f32>()
+                        .map_err(|_| {
+                            AthenaError::ParseError(
+                                EnhancedParseError::new("Invalid max failure ratio".to_string())
+                                    .with_location(line, column)
+                                    .with_suggestion("Max failure ratio must be a number between 0.0 and 1.0, e.g., 0.1, 0.3, 0.5".to_string())
+                            )
+                        })?);
+                }
+            }
+        }
+    }
+    
+    Ok(update_config)
+}
+
+fn parse_swarm_labels(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap<String, String>> {
+    let mut labels = HashMap::new();
+    let (main_line, main_column) = pair.line_col();
+    
+    for inner_pair in pair.into_inner() {
+        if let Rule::swarm_label_pair = inner_pair.as_rule() {
+            let (line, column) = inner_pair.line_col();
+            let mut label_parts = inner_pair.into_inner();
+            
+            let key_pair = label_parts.next()
+                .ok_or_else(|| AthenaError::ParseError(
+                    EnhancedParseError::new("Missing label key".to_string())
+                        .with_location(line, column)
+                        .with_suggestion("Use format: SWARM-LABELS key=value, e.g., SWARM-LABELS environment=\"production\" tier=\"backend\"".to_string())
+                ))?;
+            let key = key_pair.as_str().to_string();
+            
+            let value_pair = label_parts.next()
+                .ok_or_else(|| {
+                    let (key_line, key_column) = key_pair.line_col();
+                    AthenaError::ParseError(
+                        EnhancedParseError::new(format!("Missing value for label key '{}'", key))
+                            .with_location(key_line, key_column)
+                            .with_suggestion(format!("Complete the label: {}=\"value\", e.g., {}=\"production\"", key, key))
+                    )
+                })?;
+            let value = value_pair.as_str();
+            
+            labels.insert(key, clean_string_value(value));
+        }
+    }
+    
+    if labels.is_empty() {
+        return Err(AthenaError::ParseError(
+            EnhancedParseError::new("SWARM-LABELS must contain at least one key=value pair".to_string())
+                .with_location(main_line, main_column)
+                .with_suggestion("Add at least one label: SWARM-LABELS environment=\"production\" tier=\"backend\"".to_string())
+        ));
+    }
+    
+    Ok(labels)
+}
+
 fn clean_string_value(input: &str) -> String {
     if input.starts_with('"') && input.ends_with('"') {
         input[1..input.len()-1].to_string()
@@ -477,7 +677,7 @@ fn create_enhanced_parse_error(
                 } else {
                     (
                         extract_clean_message(&base_message),
-                        generate_generic_suggestion(&positives)
+                        generate_generic_suggestion(positives)
                     )
                 }
             }

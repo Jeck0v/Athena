@@ -14,6 +14,7 @@ pub struct DockerfileArg {
 pub struct DockerfileAnalysis {
     pub args: Vec<DockerfileArg>,
     pub dockerfile_path: String,
+    #[allow(dead_code)]
     pub content: String,
 }
 
@@ -177,7 +178,7 @@ pub fn validate_build_args_against_dockerfile(
         .collect();
     
     // Check each BUILD-ARG against Dockerfile
-    for (build_arg_name, _build_arg_value) in build_args {
+    for build_arg_name in build_args.keys() {
         if !available_args.contains(build_arg_name) {
             // Find similar ARG names for suggestions
             let suggestions = find_similar_arg_names(build_arg_name, &available_args);

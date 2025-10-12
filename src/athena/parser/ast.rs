@@ -16,9 +16,26 @@ pub struct DeploymentSection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvironmentSection {
-    pub network_name: Option<String>,
+    pub networks: Vec<NetworkDefinition>,
     pub volumes: Vec<VolumeDefinition>,
     pub secrets: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkDefinition {
+    pub name: String,
+    pub driver: Option<NetworkDriver>,
+    pub attachable: Option<bool>,
+    pub encrypted: Option<bool>,
+    pub ingress: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkDriver {
+    Bridge,
+    Overlay,
+    Host,
+    None,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +62,7 @@ pub struct Service {
     pub restart: Option<RestartPolicy>,
     pub resources: Option<ResourceLimits>,
     pub build_args: Option<HashMap<String, String>>,
+    pub swarm_config: Option<SwarmConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +106,35 @@ pub struct ResourceLimits {
     pub memory: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmConfig {
+    pub replicas: Option<u32>,
+    pub update_config: Option<UpdateConfig>,
+    pub labels: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateConfig {
+    pub parallelism: Option<u32>,
+    pub delay: Option<String>,
+    pub failure_action: Option<FailureAction>,
+    pub monitor: Option<String>,
+    pub max_failure_ratio: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FailureAction {
+    Continue,
+    Pause,
+    Rollback,
+}
+
+impl Default for AthenaFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AthenaFile {
     pub fn new() -> Self {
         Self {
@@ -109,9 +156,18 @@ impl AthenaFile {
     pub fn get_network_name(&self) -> String {
         self.environment
             .as_ref()
-            .and_then(|e| e.network_name.as_ref())
-            .map(|n| n.clone())
+            .and_then(|e| {
+                e.networks.first().map(|net| net.name.clone())
+            })
             .unwrap_or_else(|| format!("{}_network", self.get_project_name().to_lowercase()))
+    }
+
+    #[allow(dead_code)]
+    pub fn get_networks(&self) -> Vec<&NetworkDefinition> {
+        self.environment
+            .as_ref()
+            .map(|e| e.networks.iter().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -129,6 +185,54 @@ impl Service {
             restart: None,
             resources: None,
             build_args: None,
+            swarm_config: None,
+        }
+    }
+}
+
+impl Default for SwarmConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SwarmConfig {
+    pub fn new() -> Self {
+        Self {
+            replicas: None,
+            update_config: None,
+            labels: None,
+        }
+    }
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UpdateConfig {
+    pub fn new() -> Self {
+        Self {
+            parallelism: None,
+            delay: None,
+            failure_action: None,
+            monitor: None,
+            max_failure_ratio: None,
+        }
+    }
+}
+
+impl NetworkDefinition {
+    #[allow(dead_code)]
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            driver: None,
+            attachable: None,
+            encrypted: None,
+            ingress: None,
         }
     }
 }

@@ -15,9 +15,19 @@ version_id = { "VERSION-ID" ~ version_string }
 // Environment section  
 environment_section = { "ENVIRONMENT" ~ "SECTION" ~ environment_item* }
 environment_item = { network_name | volume_def | secret_def }
-network_name = { "NETWORK-NAME" ~ identifier }
+network_name = { "NETWORK-NAME" ~ identifier ~ network_options? }
 volume_def = { "VOLUME" ~ identifier ~ volume_options? }
 secret_def = { "SECRET" ~ identifier ~ string_value }
+
+// Network options for Docker Swarm overlay support
+network_options = { network_option+ }
+network_option = { 
+    ("DRIVER" ~ network_driver) |
+    ("ATTACHABLE" ~ boolean_value) |
+    ("ENCRYPTED" ~ boolean_value) |
+    ("INGRESS" ~ boolean_value)
+}
+network_driver = { "BRIDGE" | "OVERLAY" | "HOST" | "NONE" }
 
 // Services section
 services_section = { "SERVICES" ~ "SECTION" ~ service* }
@@ -36,7 +46,10 @@ service_item = {
     health_check |
     restart_policy |
     resource_limits |
-    build_args
+    build_args |
+    swarm_replicas |
+    swarm_update_config |
+    swarm_labels
 }
 
 // Service directives
@@ -52,14 +65,37 @@ resource_limits = { "RESOURCE-LIMITS" ~ "CPU" ~ string_value ~ "MEMORY" ~ string
 build_args = { "BUILD-ARGS" ~ build_arg_pair+ }
 build_arg_pair = { identifier ~ "=" ~ string_value }
 
+// Docker Swarm specific directives
+swarm_replicas = { "REPLICAS" ~ number }
+swarm_update_config = { "UPDATE-CONFIG" ~ update_config_options+ }
+swarm_labels = { "SWARM-LABELS" ~ swarm_label_pair+ }
+
+// Update configuration options
+update_config_options = { 
+    ("PARALLELISM" ~ number) |
+    ("DELAY" ~ time_value) |
+    ("FAILURE-ACTION" ~ failure_action) |
+    ("MONITOR" ~ time_value) |
+    ("MAX-FAILURE-RATIO" ~ decimal_value)
+}
+
+// Swarm label pairs
+swarm_label_pair = { identifier ~ "=" ~ string_value }
+
+// Failure actions for update config
+failure_action = { "CONTINUE" | "PAUSE" | "ROLLBACK" }
+
 // Base types
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 string_value = @{ 
     ("\"" ~ (!("\"") ~ ANY)* ~ "\"") | 
-    (!(WHITESPACE | "END" | "SERVICE" | "TO" | "CPU" | "MEMORY") ~ ANY)+
+    (!(WHITESPACE | "END" | "SERVICE" | "TO" | "CPU" | "MEMORY" | "PARALLELISM" | "DELAY" | "FAILURE-ACTION" | "MONITOR" | "MAX-FAILURE-RATIO" | "DRIVER" | "ATTACHABLE" | "ENCRYPTED" | "INGRESS") ~ ANY)+
 }
 template_var = @{ "{{" ~ identifier ~ "}}" }
 number = @{ ASCII_DIGIT+ }
+decimal_value = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+time_value = @{ ASCII_DIGIT+ ~ ("s" | "m" | "h") }
+boolean_value = { "TRUE" | "FALSE" }
 version_string = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 port_protocol = { "(" ~ ("tcp" | "udp") ~ ")" }
 volume_options = { "(" ~ volume_option ~ ("," ~ volume_option)* ~ ")" }

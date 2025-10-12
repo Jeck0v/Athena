@@ -4,6 +4,7 @@ use std::fmt;
 pub type AthenaResult<T> = Result<T, AthenaError>;
 
 #[derive(Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum AthenaError {
     #[error("{0}")]
     ParseError(EnhancedParseError),

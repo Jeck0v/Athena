@@ -1,0 +1,20 @@
+// Fixture for testing Swarm error scenarios
+DEPLOYMENT-ID SWARM_ERROR_TEST
+
+SERVICES SECTION
+
+// This fixture contains various potential error scenarios for testing
+SERVICE valid_service
+IMAGE-ID nginx:alpine
+REPLICAS 3
+SWARM-LABELS environment="production" tier="frontend"
+END SERVICE
+
+// Test cases handled in separate test functions:
+// - REPLICAS -5 (negative numbers)
+// - REPLICAS 999999999999999 (too large)
+// - REPLICAS abc (non-numeric)
+// - SWARM-LABELS tier= (missing values)
+// - UPDATE-CONFIG PARALLELISM -1 (negative)
+// - UPDATE-CONFIG FAILURE-ACTION INVALID (bad action)
+// These are generated programmatically in tests

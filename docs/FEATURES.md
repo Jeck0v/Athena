@@ -468,6 +468,246 @@ athena build examples/event-driven.ath
 athena validate examples/fullstack-web.ath
 ```
 
+## Docker Swarm Support (**NEW** 12/10/2025)
+
+Athena now provides comprehensive Docker Swarm support with native DSL directives for production-ready cluster deployments.
+
+### Replica Management
+
+**Control service scaling with intelligent replica management:**
+
+```athena
+SERVICE api_gateway
+IMAGE-ID python:3.11-slim
+REPLICAS 3                          # Scale to 3 instances
+UPDATE-CONFIG PARALLELISM 1 DELAY 10s FAILURE-ACTION ROLLBACK
+END SERVICE
+```
+
+**Generated Swarm Configuration:**
+```yaml
+api_gateway:
+  image: python:3.11-slim
+  deploy:
+    replicas: 3
+    update_config:
+      parallelism: 1        # Update one replica at a time
+      delay: 10s            # Wait 10s between updates
+      failure_action: rollback  # Rollback on failure
+```
+
+### Overlay Network Support
+
+**Production-ready overlay networks for multi-host communication:**
+
+```athena
+ENVIRONMENT SECTION
+NETWORK-NAME swarm_overlay DRIVER OVERLAY ATTACHABLE TRUE ENCRYPTED TRUE
+```
+
+**Generated Network Configuration:**
+```yaml
+networks:
+  swarm_overlay:
+    driver: overlay         # Multi-host networking
+    attachable: true        # Allow container attachment
+    encrypted: true         # Encrypt network traffic
+```
+
+### Update Configuration Options
+
+**Comprehensive update control for zero-downtime deployments:**
+
+| Directive | Description | Example |
+|-----------|-------------|---------|
+| `PARALLELISM` | Replicas updated simultaneously | `PARALLELISM 2` |
+| `DELAY` | Pause between update batches | `DELAY 30s` |
+| `FAILURE-ACTION` | Action on update failure | `FAILURE-ACTION ROLLBACK` |
+| `MONITOR` | Duration to monitor for failures | `MONITOR 60s` |
+| `MAX-FAILURE-RATIO` | Maximum allowed failure ratio | `MAX-FAILURE-RATIO 0.3` |
+
+```athena
+SERVICE microservice
+IMAGE-ID node:18-alpine
+REPLICAS 5
+UPDATE-CONFIG PARALLELISM 2 DELAY 15s FAILURE-ACTION PAUSE MONITOR 30s MAX-FAILURE-RATIO 0.2
+END SERVICE
+```
+
+### Swarm-Specific Labels
+
+**Enhanced labeling for service discovery and management:**
+
+```athena
+SERVICE web_frontend
+IMAGE-ID nginx:alpine
+REPLICAS 2
+SWARM-LABELS environment="production" tier="frontend" version="v2.1"
+END SERVICE
+```
+
+**Generated Labels:**
+```yaml
+web_frontend:
+  deploy:
+    replicas: 2
+    labels:
+      environment: production
+      tier: frontend
+      version: v2.1
+```
+
+### Complete Swarm Stack Example
+
+**Production-ready microservices with Swarm orchestration:**
+
+```athena
+DEPLOYMENT-ID MICROSERVICES_SWARM
+VERSION-ID 2.0.0
+
+ENVIRONMENT SECTION
+NETWORK-NAME overlay_network DRIVER OVERLAY ATTACHABLE TRUE ENCRYPTED TRUE
+
+SERVICES SECTION
+
+SERVICE api_gateway
+BUILD-ARGS NODE_ENV="production" API_VERSION="v2.0"
+REPLICAS 3
+UPDATE-CONFIG PARALLELISM 1 DELAY 10s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="api" environment="production"
+DEPENDS-ON user_service
+DEPENDS-ON order_service
+END SERVICE
+
+SERVICE user_service
+IMAGE-ID python:3.11-slim
+REPLICAS 2
+UPDATE-CONFIG PARALLELISM 1 DELAY 15s
+SWARM-LABELS tier="backend" service="users"
+DEPENDS-ON database
+END SERVICE
+
+SERVICE order_service
+IMAGE-ID java:17-jdk-slim
+REPLICAS 3
+UPDATE-CONFIG PARALLELISM 2 DELAY 20s FAILURE-ACTION PAUSE
+SWARM-LABELS tier="backend" service="orders"
+DEPENDS-ON database
+END SERVICE
+
+SERVICE database
+IMAGE-ID postgres:15
+REPLICAS 1
+SWARM-LABELS tier="data" critical="true"
+RESOURCE-LIMITS CPU "2.0" MEMORY "2048M"
+END SERVICE
+```
+
+### Deployment Commands
+
+**Deploy your Swarm stack with intelligent configurations:**
+
+```bash
+# Generate Swarm-compatible compose file
+athena build microservices.ath -o swarm-stack.yml
+
+# Deploy to Docker Swarm cluster
+docker stack deploy -c swarm-stack.yml myapp
+
+# Scale services dynamically
+docker service scale myapp_api_gateway=5
+
+# Monitor service status
+docker service ls
+docker service ps myapp_api_gateway
+```
+
+### Mixed Mode Support
+
+**Seamlessly combine Docker Compose and Swarm features:**
+
+```athena
+SERVICE development_service
+IMAGE-ID alpine:latest
+PORT-MAPPING 8080 TO 80    # Compose-style port mapping
+END SERVICE
+
+SERVICE production_service
+IMAGE-ID nginx:alpine
+REPLICAS 3                 # Swarm-specific scaling
+UPDATE-CONFIG PARALLELISM 1 DELAY 10s
+SWARM-LABELS tier="production"
+END SERVICE
+```
+
+### Network Driver Options
+
+| Driver | Use Case | Generated Config |
+|--------|----------|-----------------|
+| `BRIDGE` | Single-host development | `driver: bridge` |
+| `OVERLAY` | Multi-host production | `driver: overlay` |
+| `HOST` | Direct host networking | `driver: host` |
+
+### Failure Actions
+
+| Action | Behavior | When to Use |
+|--------|----------|-------------|
+| `CONTINUE` | Continue despite failures | Non-critical updates |
+| `PAUSE` | Stop updates on failure | Manual intervention needed |
+| `ROLLBACK` | Revert to previous version | Automatic recovery |
+
+### Advanced Features
+
+**Comprehensive Error Handling:**
+Athena provides robust validation for all Swarm directives with detailed error messages:
+
+```bash
+# Invalid replica numbers are caught
+REPLICAS -5                    # Error: Invalid replicas number
+REPLICAS 999999999999999999999 # Error: Number too large
+REPLICAS abc                   # Error: Non-numeric value
+
+# Malformed configurations are detected
+SWARM-LABELS environment="production" tier=  # Error: Missing value
+SWARM-LABELS                                 # Error: Empty labels
+UPDATE-CONFIG PARALLELISM -1                # Error: Negative parallelism
+```
+
+**Flexible Label Syntax:**
+```athena
+# Both quoted and unquoted values are supported
+SWARM-LABELS environment="production" tier=backend
+SWARM-LABELS environment=production tier="backend"
+```
+
+**Zero Downtime Deployments:**
+```athena
+SERVICE critical_service
+IMAGE-ID app:latest
+REPLICAS 5
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK MONITOR 60s
+SWARM-LABELS critical="true" environment="production"
+END SERVICE
+```
+
+### Best Practices
+
+**Production Deployment:**
+1. **Always use ROLLBACK** for critical services
+2. **Set appropriate delays** (10-30s) between updates
+3. **Use low parallelism** (1-2) for database services
+4. **Label services** with environment and tier information
+5. **Monitor deployments** with appropriate timeouts
+
+**Development vs Production:**
+```athena
+# Development: Fast updates, higher parallelism
+UPDATE-CONFIG PARALLELISM 3 DELAY 5s FAILURE-ACTION CONTINUE
+
+# Production: Safe updates, lower parallelism
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK MONITOR 60s
+```
+
 ## Future Enhancements
 
 ### Planned Features
@@ -478,7 +718,7 @@ athena validate examples/fullstack-web.ath
 - Log aggregation configuration
 
 **Security Enhancements:**
-- Secret management integration
+- Docker secrets integration
 - Security scanning in build process
 - Non-root user defaults
 

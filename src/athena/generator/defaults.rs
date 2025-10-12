@@ -106,6 +106,12 @@ pub struct EnhancedDeploy {
     pub resources: Option<EnhancedResources>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restart_policy: Option<EnhancedRestartPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replicas: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_config: Option<SwarmUpdateConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -130,6 +136,20 @@ pub struct EnhancedRestartPolicy {
     pub delay: String,
     pub max_attempts: u32,
     pub window: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SwarmUpdateConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parallelism: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delay: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monitor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_failure_ratio: Option<f32>,
 }
 
 /// Service type detection for intelligent defaults
@@ -251,7 +271,7 @@ impl DefaultsEngine {
             },
             healthcheck: Self::convert_healthcheck(&service.health_check, &defaults),
             restart: Self::convert_restart_policy(&service.restart, &defaults),
-            deploy: Self::convert_deploy(&service.resources),
+            deploy: Self::convert_deploy(&service.resources, &service.swarm_config),
             networks: vec![network_name.to_string()],
             pull_policy: Self::convert_pull_policy(&defaults.pull_policy),
             labels: Some(Self::generate_labels(project_name, &service.name, service_type)),
@@ -366,22 +386,60 @@ impl DefaultsEngine {
         }
     }
     
-    fn convert_deploy(resources: &Option<ResourceLimits>) -> Option<EnhancedDeploy> {
-        resources.as_ref().map(|res| EnhancedDeploy {
-            resources: Some(EnhancedResources {
-                limits: Some(ResourceSpec {
-                    cpus: Some(res.cpu.clone()),
-                    memory: Some(res.memory.clone()),
-                }),
-                reservations: None,
+    fn convert_deploy(
+        resources: &Option<ResourceLimits>,
+        swarm_config: &Option<SwarmConfig>
+    ) -> Option<EnhancedDeploy> {
+        if resources.is_none() && swarm_config.is_none() {
+            return None;
+        }
+
+        let enhanced_resources = resources.as_ref().map(|res| EnhancedResources {
+            limits: Some(ResourceSpec {
+                cpus: Some(res.cpu.clone()),
+                memory: Some(res.memory.clone()),
             }),
-            restart_policy: Some(EnhancedRestartPolicy {
-                condition: "on-failure".to_string(),
-                delay: "5s".to_string(),
-                max_attempts: 3,
-                window: "120s".to_string(),
-            }),
-        })
+            reservations: None,
+        });
+
+        let restart_policy = Some(EnhancedRestartPolicy {
+            condition: "on-failure".to_string(),
+            delay: "5s".to_string(),
+            max_attempts: 3,
+            window: "120s".to_string(),
+        });
+
+        let mut enhanced_deploy = EnhancedDeploy {
+            resources: enhanced_resources,
+            restart_policy,
+            replicas: None,
+            update_config: None,
+            labels: None,
+        };
+
+        // Add Swarm-specific configurations
+        if let Some(swarm) = swarm_config {
+            enhanced_deploy.replicas = swarm.replicas;
+            enhanced_deploy.labels = swarm.labels.clone();
+            
+            if let Some(update_config) = &swarm.update_config {
+                enhanced_deploy.update_config = Some(SwarmUpdateConfig {
+                    parallelism: update_config.parallelism,
+                    delay: update_config.delay.clone(),
+                    failure_action: update_config.failure_action.as_ref().map(|fa| {
+                        match fa {
+                            FailureAction::Continue => "continue".to_string(),
+                            FailureAction::Pause => "pause".to_string(),
+                            FailureAction::Rollback => "rollback".to_string(),
+                        }
+                    }),
+                    monitor: update_config.monitor.clone(),
+                    max_failure_ratio: update_config.max_failure_ratio,
+                });
+            }
+        }
+
+        Some(enhanced_deploy)
     }
     
     fn convert_pull_policy(pull_policy: &PullPolicy) -> String {

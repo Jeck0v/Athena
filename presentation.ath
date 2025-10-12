@@ -3,9 +3,8 @@ DEPLOYMENT-ID MODERN_ECOMMERCE
 VERSION-ID 2.0.0
 
 ENVIRONMENT SECTION
-NETWORK-NAME ecommerce_network
-// TODO: In Swarm mode, network will use overlay driver automatically
-// For now: bridge driver (compose), overlay driver (swarm deploy)
+NETWORK-NAME ecommerce_network DRIVER OVERLAY ATTACHABLE TRUE
+// Production-ready overlay network for multi-host Docker Swarm deployment
 // Define persistent volumes for production
 VOLUME postgres_data
 VOLUME redis_data
@@ -22,6 +21,9 @@ PORT-MAPPING 80 TO 80
 PORT-MAPPING 443 TO 443
 VOLUME-MAPPING "./nginx/conf.d" TO "/etc/nginx/conf.d" (ro)
 RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+REPLICAS 2
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="proxy" environment="production" critical="true"
 DEPENDS-ON api_gateway
 HEALTH-CHECK "curl -f http://localhost:80/health || exit 1"
 // Athena auto-applies: restart=always for proxy type
@@ -35,11 +37,13 @@ ENV-VARIABLE {{JWT_SECRET}}
 ENV-VARIABLE {{DATABASE_URL}}
 ENV-VARIABLE {{REDIS_URL}}
 RESOURCE-LIMITS CPU "0.5" MEMORY "512M"
+REPLICAS 3
+UPDATE-CONFIG PARALLELISM 1 DELAY 15s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="api" environment="production" scaling="auto"
 DEPENDS-ON database
 DEPENDS-ON cache
 HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
 // Athena auto-applies: restart=unless-stopped for webapp type
-// TODO: Add replicas: 3 for load balancing when Athena supports it
 END SERVICE
 
 // Product catalog service - Stateless, horizontally scalable
@@ -48,9 +52,11 @@ BUILD-ARGS CATALOG_VERSION="v1.5" SEARCH_ENGINE="elasticsearch"
 // No PORT-MAPPING for production - internal access only
 ENV-VARIABLE {{DATABASE_URL}}
 RESOURCE-LIMITS CPU "0.3" MEMORY "256M"
+REPLICAS 2
+UPDATE-CONFIG PARALLELISM 1 DELAY 20s FAILURE-ACTION PAUSE
+SWARM-LABELS tier="backend" service="catalog" environment="production"
 DEPENDS-ON database
 HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
-// TODO: Add replicas: 2 for high availability when Athena supports it
 END SERVICE
 
 // User authentication service - Stateless, scalable microservice
@@ -60,9 +66,11 @@ BUILD-ARGS AUTH_PROVIDER="oauth2" SESSION_TIMEOUT="1h"
 ENV-VARIABLE {{JWT_SECRET}}
 ENV-VARIABLE {{DATABASE_URL}}
 RESOURCE-LIMITS CPU "0.2" MEMORY "256M"
+REPLICAS 2
+UPDATE-CONFIG PARALLELISM 1 DELAY 10s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="backend" service="auth" environment="production" critical="true"
 DEPENDS-ON database
 HEALTH-CHECK "curl -f http://localhost:3000/health || exit 1"
-// TODO: Add replicas: 2 for authentication redundancy when Athena supports it
 END SERVICE
 
 // Main database - PRODUCTION: No external ports, internal network only
@@ -76,9 +84,11 @@ ENV-VARIABLE {{POSTGRES_DB}}
 // Using named volume for production persistence
 VOLUME-MAPPING "postgres_data" TO "/var/lib/postgresql/data"
 RESOURCE-LIMITS CPU "1.0" MEMORY "1024M"
+REPLICAS 1
+UPDATE-CONFIG PARALLELISM 1 DELAY 60s FAILURE-ACTION PAUSE
+SWARM-LABELS tier="data" role="primary" environment="production" critical="true"
 HEALTH-CHECK "pg_isready -U ${POSTGRES_USER} || exit 1"
 // Athena auto-applies: restart=always for database type
-// TODO: Add replicas: 1 for database (single master) when Athena supports it
 END SERVICE
 
 // Redis cache - PRODUCTION: No external ports, internal network only
@@ -89,9 +99,11 @@ Use 'docker exec' or port forwarding for debugging if needed
 Using named volume for production persistence */
 VOLUME-MAPPING "redis_data" TO "/data"
 RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
+REPLICAS 1
+UPDATE-CONFIG PARALLELISM 1 DELAY 30s FAILURE-ACTION ROLLBACK
+SWARM-LABELS tier="cache" environment="production"
 HEALTH-CHECK "redis-cli ping || exit 1"
 // Athena auto-applies: restart=always for cache type
-// TODO: Add replicas: 1 for cache (single instance) when Athena supports it
 END SERVICE
 
 // Monitoring service - Independent scraping configuration
@@ -102,5 +114,7 @@ VOLUME-MAPPING "./prometheus/prometheus.yml" TO "/etc/prometheus/prometheus.yml"
 // No DEPENDS-ON - Prometheus handles service discovery and scraping independently
 // Configure prometheus.yml to scrape targets via service names
 RESOURCE-LIMITS CPU "0.3" MEMORY "512M"
-// TODO: Add replicas: 2 for HA monitoring when Athena supports it
+REPLICAS 2
+UPDATE-CONFIG PARALLELISM 1 DELAY 20s FAILURE-ACTION CONTINUE
+SWARM-LABELS tier="monitoring" environment="production"
 END SERVICE

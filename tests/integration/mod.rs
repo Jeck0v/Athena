@@ -8,3 +8,6 @@ pub mod structural;
 
 // BUILD-ARGS feature tests
 pub mod build_args_cli_tests;
+
+// Docker Swarm feature tests
+pub mod swarm_features_test;

@@ -50,6 +50,12 @@ pub struct ResourceSpec {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerNetwork {
     driver: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    attachable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encrypted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ingress: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,8 +75,8 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
         volumes: None,
     };
 
-    // Create optimized network configuration
-    compose.networks = Some(create_optimized_networks(&network_name));
+    // Create optimized network configuration with Swarm support
+    compose.networks = Some(create_optimized_networks(athena_file));
 
     // Process volumes with enhanced configuration
     if let Some(env) = &athena_file.environment {
@@ -100,15 +106,47 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     Ok(add_enhanced_yaml_comments(formatted_yaml, athena_file))
 }
 
-/// Create optimized network configuration
-fn create_optimized_networks(network_name: &str) -> HashMap<String, DockerNetwork> {
+/// Create optimized network configuration with Docker Swarm support
+fn create_optimized_networks(athena_file: &AthenaFile) -> HashMap<String, DockerNetwork> {
     let mut networks = HashMap::new();
-    networks.insert(
-        network_name.to_string(),
-        DockerNetwork {
-            driver: "bridge".to_string(),
-        },
-    );
+    
+    if let Some(env) = &athena_file.environment {
+        // Use networks defined in environment section
+        for network_def in &env.networks {
+            let driver = match &network_def.driver {
+                Some(NetworkDriver::Bridge) => "bridge".to_string(),
+                Some(NetworkDriver::Overlay) => "overlay".to_string(),
+                Some(NetworkDriver::Host) => "host".to_string(),
+                Some(NetworkDriver::None) => "none".to_string(),
+                None => "bridge".to_string(),
+            };
+            
+            networks.insert(
+                network_def.name.clone(),
+                DockerNetwork {
+                    driver,
+                    attachable: network_def.attachable,
+                    encrypted: network_def.encrypted,
+                    ingress: network_def.ingress,
+                },
+            );
+        }
+    }
+    
+    // If no networks defined, create default network
+    if networks.is_empty() {
+        let default_name = athena_file.get_network_name();
+        networks.insert(
+            default_name,
+            DockerNetwork {
+                driver: "bridge".to_string(),
+                attachable: None,
+                encrypted: None,
+                ingress: None,
+            },
+        );
+    }
+    
     networks
 }
 
@@ -222,13 +260,12 @@ fn detect_circular_dependencies_optimized(compose: &DockerCompose) -> AthenaResu
     let mut temp_visited = HashSet::new();
 
     for service_name in compose.services.keys() {
-        if !visited.contains(service_name) {
-            if has_cycle_iterative(service_name, compose, &mut visited, &mut temp_visited)? {
+        if !visited.contains(service_name)
+            && has_cycle_iterative(service_name, compose, &mut visited, &mut temp_visited)? {
                 return Err(AthenaError::validation_error_enhanced(
                     EnhancedValidationError::circular_dependency(service_name),
                 ));
             }
-        }
     }
 
     Ok(())
@@ -292,7 +329,7 @@ fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
                 if let Some(host_port) = extract_host_port(port_mapping) {
                     port_to_services
                         .entry(host_port)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(service_name.clone());
                 }
             }
