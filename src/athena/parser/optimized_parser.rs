@@ -182,7 +182,7 @@ impl OptimizedParser {
         // Set default environment if missing
         if athena_file.environment.is_none() {
             athena_file.environment = Some(EnvironmentSection {
-                network_name: None, // Will use project name
+                networks: Vec::new(), // Will create default network
                 volumes: Vec::new(),
                 secrets: HashMap::new(),
             });
