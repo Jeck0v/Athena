@@ -1,56 +1,90 @@
 //! Template definitions for FastAPI, Flask, and Go boilerplates
 
 pub mod fastapi {
-    pub const MAIN_PY: &str = r#"from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    pub const MAIN_PY: &str = r#"from __future__ import annotations
+
+from typing import Any
+from fastapi import FastAPI, APIRouter, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
-import logging
-import os
+import structlog
+import uuid
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.logging import setup_logging, RequestIdMiddleware
 from app.core.security import verify_token
 from app.database.connection import init_database, close_database_connection
 from app.api import health
 from app.api.v1 import auth, users
+from app.core.rate_limiting import RateLimitMiddleware
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-security = HTTPBearer()
+# Setup structured logging
+setup_logging()
+logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting up {{project_name}} application...")
+    logger.info("Starting up {{project_name}} application", service="{{project_name}}", version="1.0.0")
     await init_database()
     yield
     # Shutdown
-    logger.info("Shutting down {{project_name}} application...")
+    logger.info("Shutting down {{project_name}} application", service="{{project_name}}")
     await close_database_connection()
 
 app = FastAPI(
     title="{{project_name}} API",
-    description="Production-ready {{project_name}} API with authentication",
+    description="Production-ready {{project_name}} API with authentication and observability",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "health", "description": "Health and readiness checks"},
+        {"name": "authentication", "description": "User authentication operations"},
+        {"name": "users", "description": "User management operations"},
+    ],
 )
 
+# Add request ID middleware first
+app.add_middleware(RequestIdMiddleware)
+
+# Rate limiting middleware
+app.add_middleware(RateLimitMiddleware, calls=100, period=60)
+
 # Security middleware
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS + ["localhost", "127.0.0.1"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_HOSTS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+
+# Exception handler for better error responses
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.error(
+        "Unhandled exception",
+        request_id=request_id,
+        path=request.url.path,
+        method=request.method,
+        error=str(exc),
+        exc_info=True
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "Internal server error",
+            "request_id": request_id,
+            "message": "An unexpected error occurred"
+        },
+        headers={"X-Request-ID": request_id}
+    )
 
 # Include routers
 app.include_router(health.router, tags=["health"])
@@ -62,20 +96,31 @@ api_v1.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(api_v1)
 
 @app.get("/")
-async def root():
-    return {"message": "{{project_name}} API is running", "version": "1.0.0"}
+async def root(request: Request) -> dict[str, Any]:
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.info("Root endpoint accessed", request_id=request_id)
+    return {
+        "message": "{{project_name}} API is running", 
+        "version": "1.0.0",
+        "environment": settings.ENVIRONMENT,
+        "request_id": request_id
+    }
 
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True if settings.ENVIRONMENT == "development" else False
+        reload=settings.ENVIRONMENT == "development",
+        access_log=False,  # Use structured logging instead
+        log_config=None   # Disable default logging
     )
 "#;
 
-    pub const CONFIG_PY: &str = r#"from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+    pub const CONFIG_PY: &str = r#"from __future__ import annotations
+
+from pydantic_settings import BaseSettings
+from pydantic import ConfigDict, Field, validator
 from typing import List
 import os
 
@@ -83,30 +128,83 @@ class Settings(BaseSettings):
     # Application
     PROJECT_NAME: str = "{{project_name}}"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, production")
+    DEBUG: bool = Field(default=False, description="Enable debug mode")
     
     # Security
-    SECRET_KEY: str = "{{secret_key}}"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    SECRET_KEY: str = Field("{{secret_key}}", min_length=32, description="Secret key for JWT signing")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=1440)
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 7, ge=60)  # 7 days
     ALGORITHM: str = "HS256"
     
-    # CORS
-    ALLOWED_HOSTS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # CORS and Security
+    ALLOWED_HOSTS: List[str] = Field(
+        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+        description="Allowed CORS origins"
+    )
+    TRUSTED_HOSTS: List[str] = Field(
+        default=["localhost", "127.0.0.1"],
+        description="Trusted hosts for TrustedHostMiddleware"
+    )
     
     # Database
     MONGODB_URL: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "{{snake_case}}_db"
-    DATABASE_URL: str = "postgresql://user:password@localhost/{{snake_case}}_db"
+    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/{{snake_case}}_db"
     POSTGRES_PASSWORD: str = "changeme"
+    
+    # Connection Pool Settings
+    DB_POOL_SIZE: int = Field(default=20, ge=5, le=100)
+    DB_POOL_OVERFLOW: int = Field(default=0, ge=0, le=50)
     
     # Redis (for caching/sessions)
     REDIS_URL: str = "redis://localhost:6379"
     
+    # Logging
+    LOG_LEVEL: str = Field(default="INFO", description="Logging level")
+    LOG_FORMAT: str = Field(default="json", description="Logging format: json or text")
+    
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = Field(default=True, description="Enable rate limiting")
+    RATE_LIMIT_CALLS: int = Field(default=100, ge=1, description="Rate limit calls per period")
+    RATE_LIMIT_PERIOD: int = Field(default=60, ge=1, description="Rate limit period in seconds")
+    
+    # OpenTelemetry (optional)
+    OTEL_ENABLED: bool = Field(default=False, description="Enable OpenTelemetry")
+    OTEL_ENDPOINT: str = Field(default="", description="OpenTelemetry endpoint")
+    
+    @validator("ENVIRONMENT")
+    def validate_environment(cls, v: str) -> str:
+        if v not in ["development", "staging", "production"]:
+            raise ValueError("ENVIRONMENT must be development, staging, or production")
+        return v
+    
+    @validator("LOG_LEVEL")
+    def validate_log_level(cls, v: str) -> str:
+        if v.upper() not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            raise ValueError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL")
+        return v.upper()
+    
+    @validator("LOG_FORMAT")
+    def validate_log_format(cls, v: str) -> str:
+        if v not in ["json", "text"]:
+            raise ValueError("LOG_FORMAT must be json or text")
+        return v
+    
     model_config = ConfigDict(
         env_file=".env",
-        case_sensitive=True
+        case_sensitive=True,
+        validate_assignment=True,
+        extra="forbid"
     )
+    
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT == "development"
+    
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
 
 settings = Settings()
 "#;
@@ -173,26 +271,58 @@ def generate_secure_secret() -> str:
     return secrets.token_urlsafe(32)
 "#;
 
-    pub const REQUIREMENTS_TXT: &str = r#"fastapi==0.104.1
-uvicorn[standard]==0.24.0
-gunicorn==21.2.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+    pub const REQUIREMENTS_TXT: &str = r#"# Core Framework - Latest 2025 versions
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+gunicorn==23.0.0
+pydantic==2.9.0
+pydantic-settings==2.5.0
+
+# Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6{{#if mongodb}}
-motor==3.3.2
-pymongo==4.6.0{{/if}}{{#if postgresql}}
+python-multipart==0.0.12
+
+# Structured Logging
+structlog==24.4.0
+python-json-logger==2.0.7
+
+# Database{{#if mongodb}}
+motor==3.6.0
+pymongo==4.10.1{{/if}}{{#if postgresql}}
 asyncpg==0.29.0
-sqlalchemy[asyncio]==2.0.23
-alembic==1.13.1{{/if}}
-redis==5.0.1
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.2
+sqlalchemy[asyncio]==2.0.36
+sqlmodel==0.0.22
+alembic==1.14.0{{/if}}
+
+# Caching & Storage
+redis==5.1.1
+
+# Performance & Monitoring
+slowapi==0.1.9
+prometheus-fastapi-instrumentator==7.0.0
+
+# Optional: OpenTelemetry
+opentelemetry-api==1.27.0
+opentelemetry-sdk==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-sqlalchemy==0.48b0
+opentelemetry-exporter-otlp==1.27.0
+
+# Development & Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==5.0.0
+httpx==0.27.2
+factory-boy==3.3.1
+
+# Code Quality
+ruff==0.7.4
+mypy==1.13.0
+pre-commit==4.0.1
 "#;
 
-    pub const DOCKERFILE: &str = r#"FROM python:3.11-slim AS builder
+    pub const DOCKERFILE: &str = r#"FROM python:3.12-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends gcc \
@@ -443,12 +573,242 @@ server {
 "#;
 }
 
+    // New structured logging module
+    pub const LOGGING_PY: &str = r#"from __future__ import annotations
+
+import logging
+import logging.config
+import structlog
+import uuid
+from typing import Any, Dict
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+from app.core.config import settings
+
+def setup_logging() -> None:
+    """Configure structured logging with structlog"""
+    
+    # Configure structlog
+    if settings.LOG_FORMAT == "json":
+        processors = [
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.processors.JSONRenderer()
+        ]
+    else:
+        processors = [
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.dev.ConsoleRenderer()
+        ]
+    
+    structlog.configure(
+        processors=processors,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+    
+    # Configure standard library logging
+    logging.basicConfig(
+        format="%(message)s",
+        level=getattr(logging, settings.LOG_LEVEL),
+        force=True,
+    )
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    """Middleware to add request ID to each request"""
+    
+    async def dispatch(self, request: Request, call_next) -> Response:
+        # Generate or extract request ID
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        
+        # Store request ID in request state
+        request.state.request_id = request_id
+        
+        # Set up structured logging context
+        logger = structlog.get_logger()
+        logger = logger.bind(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            user_agent=request.headers.get("User-Agent", ""),
+            remote_addr=request.client.host if request.client else None
+        )
+        
+        # Log request
+        logger.info(
+            "Request started",
+            query_params=dict(request.query_params)
+        )
+        
+        try:
+            response = await call_next(request)
+            
+            # Log response
+            logger.info(
+                "Request completed",
+                status_code=response.status_code,
+                response_time_ms=None  # Could add timing here
+            )
+            
+            # Add request ID to response headers
+            response.headers["X-Request-ID"] = request_id
+            
+            return response
+            
+        except Exception as exc:
+            logger.error(
+                "Request failed",
+                error=str(exc),
+                exc_info=True
+            )
+            raise
+"#;
+    
+    // Rate limiting middleware
+    pub const RATE_LIMITING_PY: &str = r#"from __future__ import annotations
+
+import time
+from typing import Optional
+from fastapi import Request, HTTPException, status
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+import structlog
+from collections import defaultdict, deque
+from threading import Lock
+
+from app.core.config import settings
+
+logger = structlog.get_logger()
+
+class InMemoryRateLimiter:
+    """Simple in-memory rate limiter using sliding window"""
+    
+    def __init__(self):
+        self.requests = defaultdict(deque)
+        self.lock = Lock()
+    
+    def is_allowed(self, key: str, limit: int, window: int) -> bool:
+        """Check if request is allowed under rate limit"""
+        now = time.time()
+        
+        with self.lock:
+            # Remove old requests outside the window
+            while self.requests[key] and self.requests[key][0] <= now - window:
+                self.requests[key].popleft()
+            
+            # Check if under limit
+            if len(self.requests[key]) >= limit:
+                return False
+            
+            # Add current request
+            self.requests[key].append(now)
+            return True
+    
+    def get_remaining(self, key: str, limit: int, window: int) -> int:
+        """Get remaining requests allowed"""
+        now = time.time()
+        
+        with self.lock:
+            # Clean old requests
+            while self.requests[key] and self.requests[key][0] <= now - window:
+                self.requests[key].popleft()
+            
+            return max(0, limit - len(self.requests[key]))
+    
+    def get_reset_time(self, key: str, window: int) -> Optional[float]:
+        """Get time when rate limit resets"""
+        with self.lock:
+            if not self.requests[key]:
+                return None
+            return self.requests[key][0] + window
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiting middleware"""
+    
+    def __init__(self, app, calls: int = 100, period: int = 60):
+        super().__init__(app)
+        self.calls = calls
+        self.period = period
+        self.limiter = InMemoryRateLimiter()
+    
+    def get_client_key(self, request: Request) -> str:
+        """Get client identifier for rate limiting"""
+        # Use X-Forwarded-For if available (behind proxy)
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+        
+        # Fall back to direct client IP
+        return request.client.host if request.client else "unknown"
+    
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if not settings.RATE_LIMIT_ENABLED:
+            return await call_next(request)
+        
+        # Skip rate limiting for health checks
+        if request.url.path in ["/health", "/health/ready", "/health/live"]:
+            return await call_next(request)
+        
+        client_key = self.get_client_key(request)
+        
+        # Check rate limit
+        if not self.limiter.is_allowed(client_key, self.calls, self.period):
+            logger.warning(
+                "Rate limit exceeded",
+                client=client_key,
+                path=request.url.path,
+                method=request.method
+            )
+            
+            reset_time = self.limiter.get_reset_time(client_key, self.period)
+            
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded",
+                headers={
+                    "X-RateLimit-Limit": str(self.calls),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(int(reset_time)) if reset_time else "",
+                    "Retry-After": str(self.period)
+                }
+            )
+        
+        # Add rate limit headers to response
+        response = await call_next(request)
+        
+        remaining = self.limiter.get_remaining(client_key, self.calls, self.period)
+        reset_time = self.limiter.get_reset_time(client_key, self.period)
+        
+        response.headers["X-RateLimit-Limit"] = str(self.calls)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        if reset_time:
+            response.headers["X-RateLimit-Reset"] = str(int(reset_time))
+        
+        return response
+"#;
+
 pub mod go {
     pub const MAIN_GO: &str = r#"package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -460,91 +820,125 @@ import (
 	"{{module_name}}/internal/handlers"
 	"{{module_name}}/internal/middleware"
 	"{{module_name}}/internal/routes"
+	"{{module_name}}/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Setup structured logging first
+	logger.Setup()
+	log := slog.Default()
+
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+		log.Warn("No .env file found", "error", err)
 	}
 
 	// Load configuration
 	cfg := config.Load()
 
-	// Set gin mode
+	log.Info("Starting {{project_name}} application",
+		"environment", cfg.Environment,
+		"port", cfg.Port,
+		"version", "1.0.0")
+
+	// Set gin mode and disable default logging (we use slog)
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
+	gin.DisableConsoleColor()
 
-	// Initialize database
-	db, err := database.Connect(cfg)
+	// Initialize database with context
+	ctx := context.Background()
+	db, err := database.Connect(ctx, cfg)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close(db)
 
 	// Initialize handlers
 	h := handlers.New(db, cfg)
 
-	// Setup router
+	// Setup router with structured logging middleware
 	router := gin.New()
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
+	router.Use(middleware.StructuredLogger())
+	router.Use(middleware.Recovery())
 	router.Use(middleware.CORS())
 	router.Use(middleware.Security())
+	router.Use(middleware.RequestID())
 
 	// Setup routes
 	routes.Setup(router, h)
 
-	// Create server
+	// Create server with improved settings
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:           ":" + cfg.Port,
+		Handler:        router,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Server starting on port %s", cfg.Port)
+		log.Info("Server starting", "port", cfg.Port, "environment", cfg.Environment)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			log.Error("Server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal with graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	log.Info("Shutting down server gracefully...")
 
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Graceful shutdown with extended timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		log.Error("Server forced shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exiting")
+	log.Info("Server shutdown completed successfully")
 }
 "#;
 
     pub const GO_MOD: &str = r#"module {{module_name}}
 
-go 1.21
+go 1.22
 
 require (
-	github.com/gin-gonic/gin v1.9.1
-	github.com/golang-jwt/jwt/v5 v5.0.0
-	github.com/joho/godotenv v1.4.0
-	golang.org/x/crypto v0.15.0
-	go.mongodb.org/mongo-driver v1.12.1
+	// Core framework
+	github.com/gin-gonic/gin v1.10.0
+	
+	// Authentication & Security
+	github.com/golang-jwt/jwt/v5 v5.2.1
+	golang.org/x/crypto v0.28.0
+	
+	// Configuration
+	github.com/joho/godotenv v1.5.1
+	
+	// Database drivers & ORM
+	go.mongodb.org/mongo-driver v1.17.1
 	github.com/lib/pq v1.10.9
-	github.com/jmoiron/sqlx v1.3.5
-	github.com/google/uuid v1.4.0
-	github.com/stretchr/testify v1.8.4
+	github.com/jmoiron/sqlx v1.4.0
+	
+	// Utilities
+	github.com/google/uuid v1.6.0
+	
+	// Validation
+	github.com/go-playground/validator/v10 v10.22.1
+	
+	// Testing
+	github.com/stretchr/testify v1.9.0
 )
 "#;
 
@@ -592,27 +986,122 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Run the application
 CMD ["./main"]
 "#;
+    
+    // New structured logging module for Go with slog
+    pub const GO_LOGGER: &str = r#"package logger
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"strings"
+)
+
+// LogFormat represents the logging format
+type LogFormat string
+
+const (
+	FormatJSON LogFormat = "json"
+	FormatText LogFormat = "text"
+)
+
+// Setup initializes structured logging with slog
+func Setup() {
+	logLevel := getLogLevel()
+	logFormat := getLogFormat()
+
+	var handler slog.Handler
+
+	switch logFormat {
+	case FormatJSON:
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: logLevel,
+			AddSource: true,
+		})
+	default:
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: logLevel,
+			AddSource: true,
+		})
+	}
+
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+}
+
+// getLogLevel returns the log level from environment
+func getLogLevel() slog.Level {
+	level := strings.ToUpper(os.Getenv("LOG_LEVEL"))
+	switch level {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "INFO":
+		return slog.LevelInfo
+	case "WARN", "WARNING":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+// getLogFormat returns the log format from environment
+func getLogFormat() LogFormat {
+	format := strings.ToLower(os.Getenv("LOG_FORMAT"))
+	switch format {
+	case "json":
+		return FormatJSON
+	default:
+		return FormatText
+	}
+}
+
+// WithRequestID adds request ID to the logger context
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	logger := slog.Default().With("request_id", requestID)
+	return context.WithValue(ctx, "logger", logger)
+}
+
+// FromContext returns a logger with context information
+func FromContext(ctx context.Context) *slog.Logger {
+	if logger, ok := ctx.Value("logger").(*slog.Logger); ok {
+		return logger
+	}
+	return slog.Default()
+}
+"#;
 }
 
 pub mod flask {
-    pub const APP_INIT_PY: &str = r#"from flask import Flask
+    pub const APP_INIT_PY: &str = r#"from __future__ import annotations
+
+from typing import Type
+from flask import Flask, request, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import logging
+import structlog
+import uuid
+import time
 import os
 
 from app.core.config import Config
 from app.core.extensions import db, migrate, jwt, cors, limiter
+from app.core.logging import setup_logging
 from app.api import health
 from app.api.v1 import auth, users
 
-def create_app(config_class=Config):
+def create_app(config_class: Type[Config] = Config) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Setup structured logging first
+    setup_logging(app)
+    logger = structlog.get_logger()
 
     # Initialize extensions
     db.init_app(app)
@@ -621,18 +1110,54 @@ def create_app(config_class=Config):
     cors.init_app(app)
     limiter.init_app(app)
 
-    # Configure logging
-    if not app.debug and not app.testing:
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
+    # Request ID middleware
+    @app.before_request
+    def before_request() -> None:
+        g.request_id = request.headers.get('X-Request-ID', str(uuid.uuid4()))
+        g.start_time = time.time()
         
-        file_handler = logging.FileHandler('logs/{{snake_case}}.log')
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('{{project_name}} startup')
+        logger.info(
+            \"Request started\",
+            request_id=g.request_id,
+            method=request.method,
+            path=request.path,
+            remote_addr=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+    @app.after_request
+    def after_request(response):
+        response.headers['X-Request-ID'] = g.get('request_id', 'unknown')
+        
+        duration = time.time() - g.get('start_time', time.time())
+        
+        logger.info(
+            \"Request completed\",
+            request_id=g.get('request_id'),
+            status_code=response.status_code,
+            duration_ms=round(duration * 1000, 2)
+        )
+        
+        return response
+
+    # Error handlers with structured logging
+    @app.errorhandler(404)
+    def not_found(error):
+        logger.warning(
+            \"Resource not found\",
+            request_id=g.get('request_id'),
+            path=request.path
+        )
+        return {'error': 'Resource not found', 'request_id': g.get('request_id')}, 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        logger.error(
+            \"Internal server error\",
+            request_id=g.get('request_id'),
+            error=str(error)
+        )
+        return {'error': 'Internal server error', 'request_id': g.get('request_id')}, 500
 
     # Register blueprints
     app.register_blueprint(health.bp)
@@ -641,48 +1166,129 @@ def create_app(config_class=Config):
 
     @app.route('/')
     def index():
-        return {'message': '{{project_name}} API is running', 'version': '1.0.0'}
+        return {
+            'message': '{{project_name}} API is running', 
+            'version': '1.0.0',
+            'environment': app.config.get('FLASK_ENV', 'unknown'),
+            'request_id': g.get('request_id')
+        }
 
+    logger.info('{{project_name}} application created successfully')
     return app
 "#;
 
-    pub const CONFIG_PY: &str = r#"import os
+    pub const CONFIG_PY: &str = r#"from __future__ import annotations
+
+import os
 from datetime import timedelta
+from typing import Dict, Type
 
 class Config:
+    \"\"\"Base configuration class with 2025 best practices\"\"\"
+    
     # Basic Flask configuration
-    SECRET_KEY = os.environ.get('SECRET_KEY') or '{{secret_key}}'
+    SECRET_KEY: str = os.environ.get('SECRET_KEY', '{{secret_key}}')
     
-    # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/{{snake_case}}_db'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Application settings
+    PROJECT_NAME: str = '{{project_name}}'
+    VERSION: str = '1.0.0'
     
-    # JWT Configuration
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or '{{secret_key}}'
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 1)))
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=int(os.environ.get('JWT_REFRESH_TOKEN_EXPIRES', 30)))
+    # Database configuration with connection pooling
+    SQLALCHEMY_DATABASE_URI: str = os.environ.get(
+        'DATABASE_URL', 
+        'postgresql://user:password@localhost/{{snake_case}}_db'
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
+    SQLALCHEMY_ENGINE_OPTIONS: Dict = {
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', '20')),
+        'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', '30')),
+        'pool_recycle': int(os.environ.get('DB_POOL_RECYCLE', '3600')),
+        'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '0'))
+    }
     
-    # CORS
-    CORS_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+    # JWT Configuration with enhanced security
+    JWT_SECRET_KEY: str = os.environ.get('JWT_SECRET_KEY', '{{secret_key}}')
+    JWT_ACCESS_TOKEN_EXPIRES: timedelta = timedelta(
+        minutes=int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', '30'))
+    )
+    JWT_REFRESH_TOKEN_EXPIRES: timedelta = timedelta(
+        days=int(os.environ.get('JWT_REFRESH_TOKEN_EXPIRES', '7'))
+    )
+    JWT_ALGORITHM: str = 'HS256'
+    JWT_BLACKLIST_ENABLED: bool = True
+    JWT_BLACKLIST_TOKEN_CHECKS: list = ['access', 'refresh']
+    
+    # CORS with enhanced security
+    CORS_ORIGINS: list = os.environ.get(
+        'ALLOWED_ORIGINS', 
+        'http://localhost:3000,http://127.0.0.1:3000'
+    ).split(',')
+    CORS_METHODS: list = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    CORS_ALLOW_HEADERS: list = ['Content-Type', 'Authorization']
     
     # Rate limiting
-    RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL') or 'redis://localhost:6379'
+    RATELIMIT_STORAGE_URL: str = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+    RATELIMIT_DEFAULT: str = \"200 per day, 50 per hour\"
+    
+    # Logging configuration
+    LOG_LEVEL: str = os.environ.get('LOG_LEVEL', 'INFO')
+    LOG_FORMAT: str = os.environ.get('LOG_FORMAT', 'json')
+    
+    # Security headers
+    SECURITY_HEADERS: Dict = {
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+        'X-XSS-Protection': '1; mode=block',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Content-Security-Policy': \"default-src 'self'\"
+    }
     
     # Environment
-    FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
-    DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
+    FLASK_ENV: str = os.environ.get('FLASK_ENV', 'development')
+    DEBUG: bool = os.environ.get('FLASK_DEBUG', '0') == '1'
+    TESTING: bool = False
+    
+    @property
+    def is_development(self) -> bool:
+        return self.FLASK_ENV == 'development'
+    
+    @property
+    def is_production(self) -> bool:
+        return self.FLASK_ENV == 'production'
+    
+    @property
+    def is_testing(self) -> bool:
+        return self.TESTING
 
 class DevelopmentConfig(Config):
-    DEBUG = True
-
+    \"\"\"Development configuration\"\"\"
+    DEBUG: bool = True
+    LOG_LEVEL: str = 'DEBUG'
+    
 class ProductionConfig(Config):
-    DEBUG = False
-
+    \"\"\"Production configuration with enhanced security\"\"\"
+    DEBUG: bool = False
+    TESTING: bool = False
+    
+    # Enhanced security for production
+    SESSION_COOKIE_SECURE: bool = True
+    SESSION_COOKIE_HTTPONLY: bool = True
+    SESSION_COOKIE_SAMESITE: str = 'Lax'
+    
+    # Force HTTPS in production
+    PREFERRED_URL_SCHEME: str = 'https'
+    
 class TestingConfig(Config):
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    \"\"\"Testing configuration\"\"\"
+    TESTING: bool = True
+    DEBUG: bool = True
+    SQLALCHEMY_DATABASE_URI: str = 'sqlite:///:memory:'
+    JWT_ACCESS_TOKEN_EXPIRES: timedelta = timedelta(minutes=5)
+    
+    # Disable rate limiting in tests
+    RATELIMIT_ENABLED: bool = False
 
-config = {
+config: Dict[str, Type[Config]] = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
     'testing': TestingConfig,
@@ -1077,20 +1683,52 @@ def active_user_required(f):
     return decorated_function
 "#;
 
-    pub const REQUIREMENTS_TXT: &str = r#"Flask==3.0.0
-Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.5
-Flask-JWT-Extended==4.6.0
-Flask-CORS==4.0.0
-Flask-Limiter==3.5.0
-psycopg2-binary==2.9.9
-marshmallow==3.20.1
-Werkzeug==3.0.1
-gunicorn==21.2.0
-python-dotenv==1.0.0
-redis==5.0.1
-pytest==7.4.3
+    pub const REQUIREMENTS_TXT: &str = r#"# Core Framework - Latest 2025 versions
+Flask==3.1.0
+Flask-SQLAlchemy==3.2.0
+Flask-Migrate==4.1.0
+Flask-JWT-Extended==4.7.1
+Flask-CORS==5.0.0
+Flask-Limiter==3.8.0
+
+# Database drivers
+psycopg2-binary==2.9.10
+SQLAlchemy==2.0.36
+
+# Structured Logging
+structlog==24.4.0
+python-json-logger==2.0.7
+
+# Serialization & Validation
+marshmallow==3.23.0
+marshmallow-sqlalchemy==1.1.0
+
+# Security & Password hashing
+Werkzeug==3.1.0
+bcrypt==4.2.0
+
+# Production server
+gunicorn==23.0.0
+
+# Configuration & Environment
+python-dotenv==1.0.1
+
+# Caching & Storage
+redis==5.1.1
+
+# Development & Testing
+pytest==8.3.3
 pytest-flask==1.3.0
+pytest-cov==5.0.0
+factory-boy==3.3.1
+
+# Type checking & Code quality
+mypy==1.13.0
+ruff==0.7.4
+pre-commit==4.0.1
+
+# Monitoring (optional)
+prometheus-flask-exporter==0.24.0
 "#;
 
     pub const REQUIREMENTS_TXT_MYSQL: &str = r#"Flask==3.0.0
@@ -1113,7 +1751,7 @@ pytest-flask==1.3.0
     pub const DOCKERFILE: &str = r#"# =========================
 # Build stage
 # =========================
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 ENV VENV_PATH=/opt/venv
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -1611,5 +2249,73 @@ def test_duplicate_registration(client):
     assert response.status_code == 409
     data = response.get_json()
     assert data['message'] == 'User already exists'
+"#;
+    
+    // New structured logging module for Flask
+    pub const FLASK_LOGGING_PY: &str = r#"from __future__ import annotations
+
+import logging
+import logging.config
+import structlog
+from typing import Dict, Any
+from flask import Flask, has_request_context, g
+
+def setup_logging(app: Flask) -> None:
+    """Configure structured logging for Flask with structlog"""
+    
+    log_level = app.config.get('LOG_LEVEL', 'INFO')
+    log_format = app.config.get('LOG_FORMAT', 'json')
+    
+    # Configure structlog
+    if log_format == 'json':
+        processors = [
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt='iso'),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            add_flask_context,
+            structlog.processors.JSONRenderer()
+        ]
+    else:
+        processors = [
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt='%Y-%m-%d %H:%M:%S'),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            add_flask_context,
+            structlog.dev.ConsoleRenderer()
+        ]
+    
+    structlog.configure(
+        processors=processors,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+    
+    # Configure standard library logging
+    logging.basicConfig(
+        format='%(message)s',
+        level=getattr(logging, log_level.upper()),
+        force=True,
+    )
+    
+    # Disable werkzeug logs in production
+    if not app.debug:
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
+def add_flask_context(logger, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Add Flask request context to log events"""
+    if has_request_context():
+        event_dict['request_id'] = getattr(g, 'request_id', None)
+    return event_dict
 "#;
 }

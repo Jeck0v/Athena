@@ -69,6 +69,10 @@ impl FlaskGenerator {
         write_file(base_path.join("app/core/config.py"), &config_content)?;
         write_file(base_path.join("app/core/__init__.py"), "")?;
 
+        // Structured logging module (new in 2025)
+        let logging_content = replace_template_vars_string(crate::boilerplate::templates::flask::FLASK_LOGGING_PY, &vars);
+        write_file(base_path.join("app/core/logging.py"), &logging_content)?;
+
         // Extensions (Flask extensions initialization)
         let extensions_content = replace_template_vars_string(EXTENSIONS_PY, &vars);
         write_file(base_path.join("app/core/extensions.py"), &extensions_content)?;

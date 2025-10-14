@@ -332,6 +332,15 @@ func runMigrations(db *sqlx.DB) error {
         Ok(())
     }
 
+    fn generate_logger_files(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
+        let vars = self.get_template_vars(config);
+
+        let logger_content = replace_template_vars_string(crate::boilerplate::templates::go::GO_LOGGER, &vars);
+        write_file(base_path.join("pkg/logger/logger.go"), &logger_content)?;
+
+        Ok(())
+    }
+
     fn generate_auth_files(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
         let vars = self.get_template_vars(config);
 
@@ -1635,6 +1644,10 @@ impl BoilerplateGenerator for GoGenerator {
         // Generate database files
         println!("  💾 Setting up database integration...");
         self.generate_database_files(config, base_path)?;
+
+        // Generate logger module with slog (new in 2025)
+        println!("  📋 Setting up structured logging...");
+        self.generate_logger_files(config, base_path)?;
 
         // Generate auth files
         println!("  🔐 Creating authentication system...");
