@@ -90,6 +90,14 @@ impl FastAPIGenerator {
         let security_content = replace_template_vars_string(SECURITY_PY, &vars);
         write_file(base_path.join("app/core/security.py"), &security_content)?;
 
+        // Structured logging module (new in 2025)
+        let logging_content = replace_template_vars_string(crate::boilerplate::templates::LOGGING_PY, &vars);
+        write_file(base_path.join("app/core/logging.py"), &logging_content)?;
+
+        // Rate limiting module (new in 2025)
+        let rate_limiting_content = replace_template_vars_string(crate::boilerplate::templates::RATE_LIMITING_PY, &vars);
+        write_file(base_path.join("app/core/rate_limiting.py"), &rate_limiting_content)?;
+
         Ok(())
     }
 
@@ -100,14 +108,79 @@ impl FastAPIGenerator {
         write_file(base_path.join("app/api/__init__.py"), "")?;
         write_file(base_path.join("app/api/v1/__init__.py"), "")?;
 
-        // Health endpoint (at root level)
-        let health_py = r#"from fastapi import APIRouter
+        // Enhanced health endpoint with readiness and liveness (2025 best practices)
+        let health_py = r#"from __future__ import annotations
+
+from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+import time
+from datetime import datetime, timezone
+
+from app.core.config import settings
+from app.database.connection import get_async_session
 
 router = APIRouter()
+logger = structlog.get_logger()
+
+# Store start time for uptime calculation
+start_time = time.time()
+
+# Health check dependencies
+async def check_database(db: AsyncSession = Depends(get_async_session)) -> bool:
+    """Check database connectivity"""
+    try:
+        await db.execute("SELECT 1")
+        return True
+    except Exception as e:
+        logger.error("Database health check failed", error=str(e))
+        return False
 
 @router.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "{{project_name}} API"}
+async def health_check() -> Dict[str, Any]:
+    """Basic health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "{{project_name}} API",
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "environment": settings.ENVIRONMENT
+    }
+
+@router.get("/health/ready")
+async def readiness_check(db_healthy: bool = Depends(check_database)) -> Dict[str, Any]:
+    """Readiness check - can the service handle requests?"""
+    checks = {
+        "database": db_healthy,
+        "service": True  # Add more checks as needed
+    }
+    
+    all_healthy = all(checks.values())
+    
+    if not all_healthy:
+        logger.warning("Readiness check failed", checks=checks)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not ready", "checks": checks}
+        )
+    
+    return {
+        "status": "ready",
+        "service": "{{project_name}} API",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+@router.get("/health/live")
+async def liveness_check() -> Dict[str, Any]:
+    """Liveness check - is the service alive?"""
+    return {
+        "status": "alive",
+        "service": "{{project_name}} API",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds": time.time() - start_time
+    }
 "#;
         let health_content = replace_template_vars_string(health_py, &vars);
         write_file(base_path.join("app/api/health.py"), &health_content)?;

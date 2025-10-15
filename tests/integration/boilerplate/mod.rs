@@ -7,6 +7,8 @@ pub mod fastapi_tests;
 pub mod flask_tests;
 pub mod go_tests;
 pub mod common_tests;
+pub mod laravel_tests;
+pub mod symfony_tests;
 
 // Common test utilities for boilerplate generation tests
 
@@ -117,4 +119,30 @@ pub fn check_for_echo_configuration(project_dir: &Path) -> bool {
     check_directory_contains_any(project_dir, &["cmd", "internal", "pkg"], &[
         "labstack/echo", "echo.New", "echo.Echo"
     ])
+}
+
+// PHP-specific helper functions
+
+pub fn check_for_laravel_configuration(project_dir: &Path) -> bool {
+    check_file_contains_any(project_dir, &[
+        "composer.json", "config/app.php", "artisan"
+    ], &["laravel/framework", "Laravel", "Illuminate"])
+}
+
+pub fn check_for_symfony_configuration(project_dir: &Path) -> bool {
+    check_file_contains_any(project_dir, &[
+        "composer.json", "config/services.yaml", "bin/console"
+    ], &["symfony/framework-bundle", "Symfony", "symfony/console"])
+}
+
+pub fn check_for_jwt_configuration(project_dir: &Path) -> bool {
+    check_file_contains_any(project_dir, &[
+        "composer.json", "config/jwt.php", "config/packages/lexik_jwt_authentication.yaml"
+    ], &["tymon/jwt-auth", "lexik/jwt-authentication-bundle", "JWT_SECRET", "jwt"])
+}
+
+pub fn check_for_doctrine_configuration(project_dir: &Path) -> bool {
+    check_file_contains_any(project_dir, &[
+        "composer.json", "config/packages/doctrine.yaml"
+    ], &["doctrine/orm", "doctrine/doctrine-bundle", "doctrine/migrations"])
 }
