@@ -9,6 +9,7 @@ pub mod go_tests;
 pub mod common_tests;
 pub mod laravel_tests;
 pub mod symfony_tests;
+pub mod vanilla_tests;
 
 // Common test utilities for boilerplate generation tests
 
@@ -145,4 +146,10 @@ pub fn check_for_doctrine_configuration(project_dir: &Path) -> bool {
     check_file_contains_any(project_dir, &[
         "composer.json", "config/packages/doctrine.yaml"
     ], &["doctrine/orm", "doctrine/doctrine-bundle", "doctrine/migrations"])
+}
+
+pub fn check_for_vanilla_configuration(project_dir: &Path) -> bool {
+    check_file_contains_any(project_dir, &[
+        "composer.json", "public/index.php", "src/Infrastructure/Http/Router.php"
+    ], &["firebase/php-jwt", "App\\Infrastructure\\Http\\Router", "Clean Architecture"])
 }

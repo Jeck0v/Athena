@@ -167,6 +167,23 @@ pub enum InitCommands {
         #[arg(long)]
         no_docker: bool,
     },
+
+    /// Generate a PHP Vanilla project boilerplate with Clean Architecture
+    Vanilla {
+        /// Project name
+        name: String,
+
+        /// Output directory (defaults to project name)
+        directory: Option<std::path::PathBuf>,
+
+        /// Include MySQL configuration instead of PostgreSQL
+        #[arg(long)]
+        with_mysql: bool,
+
+        /// Skip Docker files generation
+        #[arg(long)]
+        no_docker: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]

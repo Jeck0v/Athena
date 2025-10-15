@@ -84,6 +84,13 @@ pub fn generate_symfony_project(config: &ProjectConfig) -> BoilerplateResult<()>
     generator.generate_symfony_project(config)
 }
 
+/// Generate a PHP Vanilla boilerplate project
+pub fn generate_vanilla_project(config: &ProjectConfig) -> BoilerplateResult<()> {
+    let generator = php::PhpGenerator::new();
+    generator.validate_config(config)?;
+    generator.generate_vanilla_project(config)
+}
+
 /// Validate project name
 pub fn validate_project_name(name: &str) -> BoilerplateResult<()> {
     if name.is_empty() {

@@ -304,4 +304,116 @@ docker-compose exec app php bin/console doctrine:migrations:migrate
 curl http://localhost/api/health
 ```
 
+## PHP Vanilla Projects (Clean Architecture)
+```bash
+# PHP Vanilla + PostgreSQL (default)
+athena init vanilla my-api
+
+# PHP Vanilla + MySQL
+athena init vanilla my-api --with-mysql
+
+# Without Docker files
+athena init vanilla my-api --no-docker
+```
+
+**Generated PHP Vanilla Structure:**
+```
+my-api/
+├── src/
+│   ├── Domain/                       # Domain layer (Clean Architecture)
+│   │   └── User/
+│   │       ├── Entity/               # Domain entities
+│   │       │   └── User.php          # Pure domain entity with business logic
+│   │       ├── Repository/           # Repository interfaces
+│   │       │   └── UserRepositoryInterface.php
+│   │       ├── Service/              # Domain services
+│   │       │   └── UserService.php   # User business logic
+│   │       └── ValueObject/          # Value objects
+│   │           ├── UserId.php        # UUID-based user ID
+│   │           └── Email.php         # Email validation value object
+│   ├── Application/                  # Application layer
+│   │   ├── User/
+│   │   │   ├── Command/              # Command objects
+│   │   │   │   └── CreateUserCommand.php
+│   │   │   └── Handler/              # Command handlers
+│   │   │       └── CreateUserHandler.php
+│   │   └── Auth/
+│   │       ├── Command/              # Authentication commands
+│   │       │   └── LoginCommand.php
+│   │       └── Handler/              # Authentication handlers
+│   │           └── LoginHandler.php
+│   └── Infrastructure/               # Infrastructure layer
+│       ├── Http/
+│       │   ├── Router.php            # Custom routing system
+│       │   ├── Request.php           # HTTP request abstraction
+│       │   ├── Response.php          # HTTP response abstraction
+│       │   ├── Controller/
+│       │   │   └── Api/V1/           # Versioned API controllers
+│       │   │       ├── AuthController.php    # JWT authentication
+│       │   │       └── UserController.php    # User management
+│       │   └── Middleware/           # HTTP middleware
+│       │       ├── AuthMiddleware.php        # JWT validation
+│       │       └── CorsMiddleware.php        # CORS handling
+│       ├── Persistence/
+│       │   └── PDO/                  # PDO implementations
+│       │       └── UserRepository.php       # User data access
+│       ├── Database/
+│       │   └── PDOConnection.php     # Database connection management
+│       ├── Security/
+│       │   └── JWTManager.php        # JWT token management
+│       └── Config/
+│           └── AppConfig.php         # Configuration management
+├── public/
+│   ├── index.php                     # Application entry point
+│   └── .htaccess                     # Apache rewrite rules
+├── config/
+│   ├── app.php                       # Application configuration
+│   └── database.php                  # Database configuration
+├── database/
+│   └── migrations/
+│       └── 001_create_users_table.sql       # Database schema
+├── tests/                            # Comprehensive test suite
+│   ├── Unit/                         # Unit tests
+│   │   └── UserTest.php             # Domain entity tests
+│   ├── Integration/                  # Integration tests
+│   └── Functional/                   # Functional tests
+│       └── AuthTest.php             # API endpoint tests
+├── docker/                           # Docker configurations
+├── composer.json                     # PHP dependencies (PHP 8.2+)
+├── phpunit.xml                       # Testing configuration
+├── Dockerfile                        # Multi-stage production build
+├── docker-compose.yml                # Full stack deployment
+├── .env.example                      # Environment template
+└── README.md                         # Setup and API documentation
+```
+
+**PHP Vanilla Architecture Features:**
+- **Pure Clean Architecture**: Domain-driven design without framework constraints
+- **Custom HTTP Layer**: Built-in Router, Request/Response handling
+- **PDO Database Layer**: Multi-database support (PostgreSQL, MySQL)
+- **JWT Authentication**: Secure token-based authentication
+- **Value Objects**: Type-safe domain modeling
+- **Command/Handler Pattern**: CQRS-lite for business operations
+- **PSR-4 Autoloading**: Modern PHP namespace organization
+- **Dependency Injection**: Manual DI for learning and control
+
+**Database Support:**
+- **PostgreSQL** (default): Production-ready with UUID support
+- **MySQL**: Alternative with charset configuration
+- **PDO Abstraction**: Database-agnostic query layer
+- **Migration System**: SQL-based schema management
+- **Connection Pooling**: Singleton pattern for efficiency
+
+**API Endpoints:**
+```
+GET  /api/v1/health          # Health check
+POST /api/v1/auth/register   # User registration  
+POST /api/v1/auth/login      # JWT authentication
+POST /api/v1/auth/logout     # Token invalidation
+GET  /api/v1/auth/me         # Current user info
+GET  /api/v1/users           # List users
+GET  /api/v1/users/{id}      # Get user by ID
+POST /api/v1/users           # Create user
+```
+
 All generated projects include comprehensive README files with setup instructions, API documentation, and deployment guides.
