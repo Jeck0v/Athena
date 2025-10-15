@@ -1,15 +1,17 @@
-//! Boilerplate generation module for FastAPI, Flask, and Go projects
+//! Boilerplate generation module for FastAPI, Flask, Go, and PHP projects
 //! 
 //! This module provides production-ready project templates with:
 //! - Authentication systems (JWT with refresh tokens)
 //! - Security best practices (bcrypt/argon2, AES-256)
-//! - Database integration (MongoDB/PostgreSQL)
+//! - Database integration (MongoDB/PostgreSQL/MySQL)
 //! - Docker containerization
 //! - Nginx reverse proxy configuration
+//! - Clean Architecture and DDD patterns
 
 pub mod fastapi;
 pub mod flask;
 pub mod go;
+pub mod php;
 pub mod templates;
 pub mod utils;
 
@@ -66,6 +68,20 @@ pub fn generate_go_project(config: &ProjectConfig) -> BoilerplateResult<()> {
     let generator = go::GoGenerator::new();
     generator.validate_config(config)?;
     generator.generate_project(config)
+}
+
+/// Generate a Laravel PHP boilerplate project
+pub fn generate_laravel_project(config: &ProjectConfig) -> BoilerplateResult<()> {
+    let generator = php::PhpGenerator::new();
+    generator.validate_config(config)?;
+    generator.generate_laravel_project(config)
+}
+
+/// Generate a Symfony PHP boilerplate project
+pub fn generate_symfony_project(config: &ProjectConfig) -> BoilerplateResult<()> {
+    let generator = php::PhpGenerator::new();
+    generator.validate_config(config)?;
+    generator.generate_symfony_project(config)
 }
 
 /// Validate project name

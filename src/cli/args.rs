@@ -133,6 +133,40 @@ pub enum InitCommands {
         #[arg(long)]
         no_docker: bool,
     },
+
+    /// Generate a Laravel PHP project boilerplate with Clean Architecture
+    Laravel {
+        /// Project name
+        name: String,
+
+        /// Output directory (defaults to project name)
+        directory: Option<std::path::PathBuf>,
+
+        /// Include MySQL configuration instead of PostgreSQL
+        #[arg(long)]
+        with_mysql: bool,
+
+        /// Skip Docker files generation
+        #[arg(long)]
+        no_docker: bool,
+    },
+
+    /// Generate a Symfony PHP project boilerplate with Hexagonal Architecture
+    Symfony {
+        /// Project name
+        name: String,
+
+        /// Output directory (defaults to project name)
+        directory: Option<std::path::PathBuf>,
+
+        /// Include MySQL configuration instead of PostgreSQL
+        #[arg(long)]
+        with_mysql: bool,
+
+        /// Skip Docker files generation
+        #[arg(long)]
+        no_docker: bool,
+    },
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]
