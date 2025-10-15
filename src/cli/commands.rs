@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::athena::{generate_docker_compose, parse_athena_file, AthenaError, AthenaResult};
 use crate::boilerplate::{
     generate_fastapi_project, generate_flask_project, generate_go_project, 
-    generate_laravel_project, generate_symfony_project,
+    generate_laravel_project, generate_symfony_project, generate_vanilla_project,
     DatabaseType, GoFramework, ProjectConfig,
 };
 use crate::cli::args::{Commands, InitCommands};
@@ -278,6 +278,39 @@ fn execute_init(init_cmd: InitCommands, verbose: bool) -> AthenaResult<()> {
             };
 
             generate_symfony_project(&config)?;
+            Ok(())
+        }
+
+        InitCommands::Vanilla {
+            name,
+            directory,
+            with_mysql,
+            no_docker,
+        } => {
+            let db_type = if with_mysql { "MySQL" } else { "PostgreSQL" };
+            if verbose {
+                println!("Initializing PHP Vanilla project with {}: {}", db_type, name);
+            }
+
+            // Choose database type
+            let database = if with_mysql {
+                DatabaseType::MySQL
+            } else {
+                DatabaseType::PostgreSQL
+            };
+
+            // Determine directory
+            let project_dir = directory.unwrap_or_else(|| Path::new(&name).to_path_buf());
+
+            let config = ProjectConfig {
+                name: name.clone(),
+                directory: project_dir.to_string_lossy().to_string(),
+                database,
+                include_docker: !no_docker,
+                framework: None, // Not applicable for Vanilla
+            };
+
+            generate_vanilla_project(&config)?;
             Ok(())
         }
     }

@@ -34,6 +34,7 @@ pub struct PhpGenerator;
 pub enum PhpFramework {
     Laravel,
     Symfony,
+    Vanilla,
 }
 
 impl Default for PhpGenerator {
@@ -369,6 +370,7 @@ impl PhpGenerator {
         let docker_compose = match framework {
             PhpFramework::Laravel => replace_template_vars_string(LARAVEL_DOCKER_COMPOSE, &vars),
             PhpFramework::Symfony => replace_template_vars_string(SYMFONY_DOCKER_COMPOSE, &vars),
+            PhpFramework::Vanilla => replace_template_vars_string(SYMFONY_DOCKER_COMPOSE, &vars), // Reuse Symfony's Docker setup
         };
         write_file(base_path.join("docker-compose.yml"), &docker_compose)?;
 
@@ -383,6 +385,11 @@ impl PhpGenerator {
         let env_example = match framework {
             PhpFramework::Laravel => replace_template_vars_string(LARAVEL_ENV_EXAMPLE, &vars),
             PhpFramework::Symfony => replace_template_vars_string(SYMFONY_ENV_EXAMPLE, &vars),
+            PhpFramework::Vanilla => {
+                // For Vanilla, the .env.example is already generated in generate_vanilla_files
+                // So we skip it here to avoid overwriting
+                return Ok(());
+            }
         };
         write_file(base_path.join(".env.example"), &env_example)?;
 
@@ -393,6 +400,7 @@ impl PhpGenerator {
         let nginx_default_conf = match framework {
             PhpFramework::Laravel => replace_template_vars_string(LARAVEL_NGINX_DEFAULT_CONF, &vars),
             PhpFramework::Symfony => replace_template_vars_string(SYMFONY_NGINX_DEFAULT_CONF, &vars),
+            PhpFramework::Vanilla => replace_template_vars_string(SYMFONY_NGINX_DEFAULT_CONF, &vars), // Reuse Symfony's nginx config
         };
         write_file(base_path.join("docker/nginx/default.conf"), &nginx_default_conf)?;
 
@@ -427,6 +435,10 @@ impl PhpGenerator {
                 let unit_test = replace_template_vars_string(SYMFONY_USER_UNIT_TEST, &vars);
                 write_file(base_path.join("tests/Unit/Domain/UserTest.php"), &unit_test)?;
             }
+            PhpFramework::Vanilla => {
+                // Test files are already generated in generate_vanilla_files
+                // This is to avoid duplication since Vanilla handles its own test generation
+            }
         }
 
         Ok(())
@@ -438,6 +450,7 @@ impl PhpGenerator {
         let readme = match framework {
             PhpFramework::Laravel => replace_template_vars_string(LARAVEL_README, &vars),
             PhpFramework::Symfony => replace_template_vars_string(SYMFONY_README, &vars),
+            PhpFramework::Vanilla => replace_template_vars_string(VANILLA_README, &vars),
         };
         
         write_file(base_path.join("README.md"), &readme)?;
@@ -543,6 +556,163 @@ impl PhpGenerator {
             println!("  symfony server:start");
         }
 
+        Ok(())
+    }
+
+    pub fn generate_vanilla_project(&self, config: &ProjectConfig) -> BoilerplateResult<()> {
+        let base_path = Path::new(&config.directory);
+        let framework = PhpFramework::Vanilla;
+
+        println!("Generating PHP Vanilla project with Clean Architecture: {}", config.name);
+        
+        // Create directory structure
+        println!("  📁 Creating clean architecture structure...");
+        self.create_vanilla_structure(base_path)?;
+
+        // Generate PHP Vanilla files
+        println!("  🐘 Generating PHP vanilla application files...");
+        self.generate_vanilla_files(config, base_path)?;
+
+        // Generate Docker files
+        if config.include_docker {
+            println!("  🐳 Generating Docker configuration...");
+            self.generate_docker_files(config, base_path, &framework)?;
+        }
+
+        // Generate test files
+        println!("  🧪 Creating test suite...");
+        self.generate_test_files(config, base_path, &framework)?;
+
+        // Generate documentation
+        println!("  📚 Generating documentation...");
+        self.generate_documentation(config, base_path, &framework)?;
+
+        println!("PHP Vanilla project '{}' created successfully!", config.name);
+        println!("📍 Location: {}", base_path.display());
+        
+        if config.include_docker {
+            println!("\n🔧 Next steps:");
+            println!("  cd {}", config.directory);
+            println!("  cp .env.example .env  # Edit with your configuration");
+            println!("  docker-compose up --build");
+            println!("  docker-compose exec app composer install");
+        } else {
+            println!("\n🔧 Next steps:");
+            println!("  cd {}", config.directory);
+            println!("  composer install");
+            println!("  cp .env.example .env  # Edit with your configuration");
+            println!("  php -S localhost:8000 public/index.php");
+        }
+
+        Ok(())
+    }
+
+    fn create_vanilla_structure(&self, base_path: &Path) -> BoilerplateResult<()> {
+        let directories = vec![
+            // Clean Architecture structure
+            "src",
+            "src/Domain",
+            "src/Domain/User",
+            "src/Domain/User/Entity",
+            "src/Domain/User/Repository",
+            "src/Domain/User/Service",
+            "src/Domain/User/ValueObject",
+            "src/Domain/Auth",
+            "src/Domain/Auth/Service",
+            "src/Application",
+            "src/Application/User",
+            "src/Application/User/Command",
+            "src/Application/User/Query",
+            "src/Application/User/Handler",
+            "src/Application/Auth",
+            "src/Application/Auth/Command",
+            "src/Application/Auth/Handler",
+            "src/Infrastructure",
+            "src/Infrastructure/Http",
+            "src/Infrastructure/Http/Controller",
+            "src/Infrastructure/Http/Controller/Api",
+            "src/Infrastructure/Http/Controller/Api/V1",
+            "src/Infrastructure/Http/Middleware",
+            "src/Infrastructure/Persistence",
+            "src/Infrastructure/Persistence/PDO",
+            "src/Infrastructure/Security",
+            "src/Infrastructure/Routing",
+            "src/Infrastructure/Database",
+            "src/Infrastructure/Config",
+            // Public directory
+            "public",
+            // Config directory
+            "config",
+            // Database directory
+            "database",
+            "database/migrations",
+            // Tests
+            "tests",
+            "tests/Unit",
+            "tests/Integration",
+            "tests/Functional",
+            // Docker if needed
+            "docker",
+            "docker/php",
+            "docker/nginx",
+        ];
+
+        create_directory_structure(base_path, &directories)
+    }
+
+    fn generate_vanilla_files(&self, config: &ProjectConfig, base_path: &Path) -> BoilerplateResult<()> {
+        let vars = self.get_template_vars(config);
+
+        // Core application files
+        write_file(base_path.join("composer.json"), &replace_template_vars_string(VANILLA_COMPOSER_JSON, &vars))?;
+        write_file(base_path.join("public/index.php"), &replace_template_vars_string(VANILLA_INDEX_PHP, &vars))?;
+        write_file(base_path.join("public/.htaccess"), &replace_template_vars_string(VANILLA_HTACCESS, &vars))?;
+        
+        // Configuration files
+        write_file(base_path.join("config/database.php"), &replace_template_vars_string(VANILLA_DATABASE_CONFIG, &vars))?;
+        write_file(base_path.join("config/app.php"), &replace_template_vars_string(VANILLA_APP_CONFIG, &vars))?;
+        
+        // Environment files
+        write_file(base_path.join(".env.example"), &replace_template_vars_string(VANILLA_ENV_EXAMPLE, &vars))?;
+        
+        // Core framework files
+        write_file(base_path.join("src/Infrastructure/Http/Router.php"), &replace_template_vars_string(VANILLA_ROUTER, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Http/Request.php"), &replace_template_vars_string(VANILLA_REQUEST, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Http/Response.php"), &replace_template_vars_string(VANILLA_RESPONSE, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Database/PDOConnection.php"), &replace_template_vars_string(VANILLA_PDO_CONNECTION, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Security/JWTManager.php"), &replace_template_vars_string(VANILLA_JWT_MANAGER, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Config/AppConfig.php"), &replace_template_vars_string(VANILLA_APP_CONFIG_CLASS, &vars))?;
+        
+        // Domain layer
+        write_file(base_path.join("src/Domain/User/Entity/User.php"), &replace_template_vars_string(VANILLA_USER_ENTITY, &vars))?;
+        write_file(base_path.join("src/Domain/User/Repository/UserRepositoryInterface.php"), &replace_template_vars_string(VANILLA_USER_REPOSITORY_INTERFACE, &vars))?;
+        write_file(base_path.join("src/Domain/User/Service/UserService.php"), &replace_template_vars_string(VANILLA_USER_SERVICE, &vars))?;
+        write_file(base_path.join("src/Domain/User/ValueObject/Email.php"), &replace_template_vars_string(VANILLA_EMAIL_VALUE_OBJECT, &vars))?;
+        write_file(base_path.join("src/Domain/User/ValueObject/UserId.php"), &replace_template_vars_string(VANILLA_USER_ID_VALUE_OBJECT, &vars))?;
+        
+        // Application layer
+        write_file(base_path.join("src/Application/User/Command/CreateUserCommand.php"), &replace_template_vars_string(VANILLA_CREATE_USER_COMMAND, &vars))?;
+        write_file(base_path.join("src/Application/User/Handler/CreateUserHandler.php"), &replace_template_vars_string(VANILLA_CREATE_USER_HANDLER, &vars))?;
+        write_file(base_path.join("src/Application/Auth/Command/LoginCommand.php"), &replace_template_vars_string(VANILLA_LOGIN_COMMAND, &vars))?;
+        write_file(base_path.join("src/Application/Auth/Handler/LoginHandler.php"), &replace_template_vars_string(VANILLA_LOGIN_HANDLER, &vars))?;
+        
+        // Infrastructure layer
+        write_file(base_path.join("src/Infrastructure/Http/Controller/Api/V1/AuthController.php"), &replace_template_vars_string(VANILLA_AUTH_CONTROLLER, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Http/Controller/Api/V1/UserController.php"), &replace_template_vars_string(VANILLA_USER_CONTROLLER, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Persistence/PDO/UserRepository.php"), &replace_template_vars_string(VANILLA_USER_REPOSITORY, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Http/Middleware/AuthMiddleware.php"), &replace_template_vars_string(VANILLA_AUTH_MIDDLEWARE, &vars))?;
+        write_file(base_path.join("src/Infrastructure/Http/Middleware/CorsMiddleware.php"), &replace_template_vars_string(VANILLA_CORS_MIDDLEWARE, &vars))?;
+        
+        // Database migrations
+        write_file(base_path.join("database/migrations/001_create_users_table.sql"), &replace_template_vars_string(VANILLA_USERS_MIGRATION, &vars))?;
+        
+        // Testing configuration
+        write_file(base_path.join("phpunit.xml"), &replace_template_vars_string(VANILLA_PHPUNIT_XML, &vars))?;
+        
+        // Test files
+        write_file(base_path.join("tests/Unit/UserTest.php"), &replace_template_vars_string(VANILLA_USER_TEST, &vars))?;
+        write_file(base_path.join("tests/Functional/AuthTest.php"), &replace_template_vars_string(VANILLA_AUTH_FUNCTIONAL_TEST, &vars))?;
+        
         Ok(())
     }
 }
