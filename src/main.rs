@@ -3,7 +3,6 @@ use std::process;
 
 mod cli;
 mod athena;
-mod boilerplate;
 
 use cli::{Cli, execute_command};
 

@@ -23,12 +23,6 @@ tests/
 │   ├── enhanced_error_handling_test.rs # Advanced error scenarios with suggestions
 │   ├── build_args_cli_tests.rs         # Dockerfile integration and BUILD-ARGS tests
 │   ├── swarm_features_test.rs          # Docker Swarm support and error handling
-│   ├── boilerplate/                    # Modular boilerplate tests by framework
-│   │   ├── mod.rs                      # Common utilities and shared functions
-│   │   ├── fastapi_tests.rs            # FastAPI project generation tests
-│   │   ├── flask_tests.rs              # Flask project generation tests
-│   │   ├── go_tests.rs                 # Go project generation tests (Gin, Echo, Fiber)
-│   │   └── common_tests.rs             # Common init command tests and validation
 │   └── structural/                     # Organized structural tests (lightweight)
 │       ├── mod.rs                      # Common utilities and module declarations
 │       ├── basic_structure.rs          # Basic YAML structure validation
@@ -105,17 +99,8 @@ cargo test --test integration_tests build_args_cli_tests
 # Docker Swarm feature tests
 cargo test --test integration_tests swarm_features_test
 
-# Boilerplate generation tests
-cargo test --test integration_tests boilerplate
-
 # All structural tests (lightweight YAML validation)
 cargo test --test integration_tests structural
-
-# Specific boilerplate test categories
-cargo test --test integration_tests boilerplate::fastapi_tests
-cargo test --test integration_tests boilerplate::flask_tests
-cargo test --test integration_tests boilerplate::go_tests
-cargo test --test integration_tests boilerplate::common_tests
 
 # Specific structural test categories
 cargo test --test integration_tests structural::basic_structure
@@ -192,15 +177,7 @@ cargo test --test integration_tests structural --verbose
 - Complete integration tests with Swarm + Compose features
 - 13 dedicated error handling tests for edge cases
 
-### 7. Boilerplate Generation Tests (`boilerplate/`)
-- **Modular organization** by framework for better maintainability
-- **FastAPI tests** (`fastapi_tests.rs`): Basic init, PostgreSQL/MongoDB options, Docker/no-Docker modes
-- **Flask tests** (`flask_tests.rs`): Basic init, MySQL integration
-- **Go tests** (`go_tests.rs`): Gin, Echo, and Fiber framework support
-- **Common tests** (`common_tests.rs`): Error handling, help commands, project validation
-- Tests project structure generation, configuration files, and dependency setup
-
-### 8. Structural Tests (`structural/`)
+### 7. Structural Tests (`structural/`)
 - **Organized by functional categories** for better maintainability
 - **Lightweight YAML validation** without heavy snapshots
 - Tests **structure and logic** rather than exact formatting
@@ -315,26 +292,16 @@ fn test_service_configuration_structure() {
 - **Logic correctness** (restart policies, health checks)
 - **Docker Compose compliance** (valid modern format)
 
-### Boilerplate Tests
-Modular boilerplate tests organized by framework, each verifying:
-- **Project directory creation** and proper file structure
-- **Framework-specific configurations** (dependencies, settings)
-- **Database integration** (PostgreSQL, MongoDB, MySQL setup)
-- **Docker configuration** generation and optional exclusion
-- **Custom directory** and project name handling
-- **Error scenarios** and validation
-
 ### Test Performance & Statistics
 
 **Current test suite:**
-- **Total tests**: 117 integration tests
+- **Total tests**: 103 integration tests
 - **CLI tests**: 13 tests (command parsing, help, validation)
 - **Docker Compose generation**: 11 tests (YAML generation, validation, port conflict detection)
 - **Error handling**: 21 tests (comprehensive error scenarios including port conflicts)
 - **Enhanced error handling**: 6 tests (advanced error scenarios with suggestions)
 - **Build args CLI**: 8 tests (Dockerfile integration and validation)
 - **Swarm features**: 21 tests (Docker Swarm support with comprehensive error handling)
-- **Boilerplate generation**: 14 tests (modular by framework)
 - **Structural tests**: 23 tests (organized in 6 categories including comments)
 - **Execution time**: < 1 second for structural tests
 - **Test organization**: Modular structure for easy maintenance
@@ -349,12 +316,6 @@ Modular boilerplate tests organized by framework, each verifying:
 - `formatting.rs`: 2 tests (YAML validity, readable output formatting)
 - `comments.rs`: 11 tests (comment parsing, edge cases, multi-line comments)
 - `complex_scenarios.rs`: 1 test (complex microservices architecture)
-
-**Boilerplate tests:**
-- `fastapi_tests.rs`: 6 tests (basic, PostgreSQL, MongoDB, no-Docker, custom directory, help)
-- `flask_tests.rs`: 2 tests (basic, MySQL integration)
-- `go_tests.rs`: 3 tests (Gin, Echo, Fiber frameworks)
-- `common_tests.rs`: 3 tests (error handling, validation, help commands)
 
 ## Port Conflict Detection Tests
 
@@ -501,10 +462,3 @@ For new structural tests, place them in the appropriate category:
 - `policies.rs`: Restart policies and health checks
 - `formatting.rs`: YAML validity and output formatting
 - `complex_scenarios.rs`: Multi-service architecture tests
-
-### Adding Boilerplate Tests
-For new boilerplate tests, place them in the appropriate framework file:
-- `fastapi_tests.rs`: FastAPI-specific features and configurations
-- `flask_tests.rs`: Flask-specific features and database integrations
-- `go_tests.rs`: Go framework-specific tests (Gin, Echo, Fiber)
-- `common_tests.rs`: Cross-framework functionality (validation, help, errors)
