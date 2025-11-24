@@ -99,7 +99,7 @@ Suggestion: Use different host ports, e.g., 8080, 8081
 ### Installation
 ```bash
 # Install from source
-git clone https://github.com/your-org/athena.git
+git clone https://github.com/Jeck0v/Athena
 cd athena
 cargo install --path .
 
@@ -136,14 +136,14 @@ athena build deploy.ath
 - **Fail-Fast Processing** => Immediate feedback with no partial generation
 
 ### Intelligent Defaults 2025+
-- No more `version` field modern Docker Compose spec compliance
+- Auto check for the Dockerfile
 - Auto-detects service types database, Cache, WebApp, Proxy patterns
 - Smart restart policies `always` for databases, `unless-stopped` for apps
 - Optimized health checks different intervals per service type
 - Container naming follows modern conventions (`project-service`)
 
 ### Docker-First Approach
-- Dockerfile by default => No image? Uses `build.dockerfile: Dockerfile`
+- Dockerfile by default => No image? Just dont configure it and athena will check for your Dockerfile nativement
 - Intelligent networking => Auto-configured networks with proper isolation
 - Production-ready => Security, resource limits, and health monitoring
 - Standards compliant => Follows Docker Compose 2025 best practices
@@ -154,7 +154,7 @@ athena build deploy.ath
 - Optimized parsing => **<1ms parse time, <2ms generation**
 - Memory efficient => Pre-allocated structures for large compositions
 
-### Syntax Highlighting (New!)
+### Syntax Highlighting (SOON)
 - **Beautiful DSL highlighting** for `.ath` files with customizable colors
 - **Zed editor extension** ready to install in `syntax-highlighting/`
 - **Smart color coding** for keywords, directives, template variables, and more
@@ -210,4 +210,4 @@ This project is licensed under the MIT License see the [LICENSE](LICENSE) file f
 
 ---
 
-Built with ❤️ using Rust | Production-ready DevOps made simple
+Built with ❤️ using Rust | Make DevOps great again.
