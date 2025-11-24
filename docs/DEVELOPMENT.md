@@ -30,7 +30,6 @@ cargo test --test integration_tests structural
 cargo test --test integration_tests cli_commands_test
 cargo test --test integration_tests docker_compose_generation_test
 cargo test --test integration_tests error_handling_test
-cargo test --test integration_tests boilerplate
 
 # Run with verbose output
 cargo test --test integration_tests structural --verbose
@@ -49,7 +48,6 @@ cargo test --test integration_tests structural --verbose
 
 ## Test Requirements
 - Add structural tests for Docker Compose generation changes
-- Add boilerplate tests for new project generators
 - Add CLI tests for new command options
 - All integration tests must pass on Ubuntu latest via GitHub Actions
 

@@ -4,11 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-0.1.0-green.svg)](Cargo.toml)
 
-Athena is a powerful CLI toolkit for back-end developers and DevOps engineers that simplifies project creation and infrastructure setup. It provides two main capabilities:
-
-1. **Docker Compose Generator**: Transform a COBOL-inspired DSL into production-ready Docker Compose configurations with minimal effort.
-2. **Project Boilerplate Generator**: Quickly scaffold full-stack back-end projects using frameworks like FastAPI, Go (Gin/Echo/Fiber), and Flask, with modern best practices and Docker integration.
-
+Athena is a powerful CLI tool for back-end developers and DevOps engineers that transforms a COBOL-inspired DSL into production-ready Docker Compose configurations with minimal effort.
 
 Built with performance and maintainability in mind, Athena uses intelligent defaults and modern Docker standards to generate optimized configurations with minimal configuration.
 
@@ -131,15 +127,6 @@ END SERVICE' > deploy.ath
 athena build deploy.ath
 ```
 
-### Generate Full-Stack Project
-```bash
-# Create FastAPI + PostgreSQL project
-athena init fastapi my-api --with-postgresql
-
-# Create Go + MongoDB microservice
-athena init go my-service --framework gin --with-mongodb
-```
-
 ## Key Features
 
 ### Enhanced Error Handling System (New!)
@@ -167,12 +154,6 @@ athena init go my-service --framework gin --with-mongodb
 - Optimized parsing => **<1ms parse time, <2ms generation**
 - Memory efficient => Pre-allocated structures for large compositions
 
-### Full-Stack Boilerplates
-- FastAPI + PostgreSQL/MongoDB => Production authentication, async drivers
-- Go + Gin/Echo/Fiber => Clean architecture, proper middleware
-- Flask + PostgreSQL =>  Modern Python web development
-- Docker ready => Multi-stage builds, Nginx reverse proxy included
-
 ### Syntax Highlighting (New!)
 - **Beautiful DSL highlighting** for `.ath` files with customizable colors
 - **Zed editor extension** ready to install in `syntax-highlighting/`
@@ -186,7 +167,6 @@ athena init go my-service --framework gin --with-mongodb
 - [Syntax Highlighting (**New**)](syntax-highlighting/README.md) - Beautiful colors for `.ath` files in Zed editor.
 - [Installation Guide](docs/INSTALLATION.md)
 - [Docker Compose Generator Usage](docs/DSL_REFERENCE.md)
-- [Boilerplate Project Generator](docs/BOILERPLATE.md)
 - [Examples](docs/EXAMPLES.md)
 
 ### Development
@@ -196,26 +176,15 @@ athena init go my-service --framework gin --with-mongodb
 
 ## Basic Usage
 
-### Docker Compose Generator
 ```bash
 athena build deploy.ath              # Generate docker-compose.yml
 athena build deploy.ath -o custom.yml   # Custom output file
 athena validate deploy.ath           # Validate syntax only
+athena info                          # Show DSL information
+athena info --examples               # Show usage examples
+athena info --directives             # Show all directives
 ```
 
-### Boilerplate Generator
-```bash
-# FastAPI projects
-athena init fastapi my-api --with-postgresql
-athena init fastapi my-api --with-mongodb
-
-# Go projects
-athena init go my-service --framework gin
-athena init go my-service --framework echo --with-postgresql
-
-# Flask projects
-athena init flask my-app --with-postgresql
-```
 ## What Athena Adds Automatically
 
 - Smart service detection (Database, Cache, WebApp, Proxy)

@@ -19,12 +19,6 @@ athena/
 │   │   │   ├── compose.rs     # Main generator
 │   │   │   └── defaults.rs    # Intelligent defaults engine
 │   │   └── error.rs           # Typed error handling
-│   ├── boilerplate/           # Project generators
-│   │   ├── fastapi.rs         # FastAPI project generator
-│   │   ├── go.rs              # Go project generator
-│   │   ├── flask.rs           # Flask project generator
-│   │   ├── templates.rs       # Embedded templates
-│   │   └── utils.rs           # Template utilities
 │   └── main.rs                # Application entrypoint
 ├── docs/                      # Documentation
 ├── tests/                     # Comprehensive test suite
@@ -32,11 +26,6 @@ athena/
 │   │   ├── cli_commands_test.rs      # CLI command tests
 │   │   ├── docker_compose_generation_test.rs # YAML generation tests
 │   │   ├── error_handling_test.rs    # Error scenario tests
-│   │   ├── boilerplate/             # Modular boilerplate tests
-│   │   │   ├── fastapi_tests.rs     # FastAPI project generation
-│   │   │   ├── flask_tests.rs       # Flask project generation
-│   │   │   ├── go_tests.rs          # Go project generation
-│   │   │   └── common_tests.rs      # Common init functionality
 │   │   └── structural/              # Lightweight structural tests
 │   │       ├── basic_structure.rs   # YAML structure validation
 │   │       ├── service_configuration.rs # Service config tests
@@ -68,5 +57,5 @@ athena/
 - **Parsing** using `pest` for grammar-based parsing
 - **YAML generation** using `serde_yaml` for safe serialization
 - **Testing** using comprehensive integration tests with GitHub Actions CI/CD
-- **Test structure** organized by functionality (structural, boilerplate, CLI, error handling)
+- **Test structure** organized by functionality (structural, CLI, error handling)
 - **Lightweight testing** approach focusing on logic over format

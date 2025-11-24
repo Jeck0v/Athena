@@ -236,7 +236,6 @@ fn test_cli_help() {
         .stdout(predicate::str::contains("A powerful CLI tool for DSL-based Docker Compose generation"))
         .stdout(predicate::str::contains("Commands:"))
         .stdout(predicate::str::contains("build"))
-        .stdout(predicate::str::contains("init"))
         .stdout(predicate::str::contains("validate"))
         .stdout(predicate::str::contains("info"));
 }
