@@ -1,33 +1,25 @@
-# Athena - Production-Ready DevOps Toolkit
+# Athena -- Declarative DevOps Toolkit
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-0.1.0-green.svg)](Cargo.toml)
 
-Athena is a powerful CLI tool for back-end developers and DevOps engineers that transforms a COBOL-inspired DSL into production-ready Docker Compose configurations with minimal effort.
+Athena is an open source CLI tool for back-end developers and DevOps engineers that turns a COBOL-inspired DSL into clean, consistent Docker Compose configurations.
 
-Built with performance and maintainability in mind, Athena uses intelligent defaults and modern Docker standards to generate optimized configurations with minimal configuration.
+The goal is simple: reduce YAML noise, enforce sane defaults, and make infrastructure definitions easier to read, validate and evolve.
+
+Athena focuses on correctness, clarity and automation first. Production hardening is intentionally progressive and opinionated, not magic.
 
 ## Why Athena DSL?
 
-Writing infrastructure in plain YAML often leads to:
+Writing infrastructure directly in YAML often leads to repetitive, fragile and hard to review configurations.
 
-- **Repetition**: ports, env vars, healthchecks duplicated across files
-- **Verbosity**: even small projects need hundreds of lines of config
-- **Errors**: indentation, misplaced keys, and subtle schema mistakes
-- **Low readability**: hard for newcomers to understand what's happening
-
-Athena introduces a **COBOL-inspired DSL** designed for clarity and speed:
-
-### Advantages over plain YAML
-- **Declarative & explicit**: easy to read and understand at a glance
-- **Minimal boilerplate**: no need to repeat Docker defaults
-- **Error-resistant**: parser catches common mistakes early
-- **Smart defaults**: healthchecks, restart policies, and networks added automatically
-- **Composable**: same DSL can currently generate Docker Compose, and in the future Kubernetes and Terraform
+Athena introduces a DSL designed to be explicit, readable and tooling-friendly, while remaining close to Docker concepts.
 
 ### Example
+
 Instead of writing verbose YAML:
+
 ```yaml
 services:
   backend:
@@ -47,7 +39,8 @@ services:
       retries: 5
 ```
 
-You just write:
+You write:
+
 ```athena
 DEPLOYMENT-ID MY_APP
 
@@ -63,150 +56,104 @@ IMAGE-ID postgres:15
 END SERVICE
 ```
 
-Athena expands this into **production-ready Docker Compose** with all the right defaults.
+Athena expands this into a complete Docker Compose file with validated structure and consistent defaults.
 
-## Enhanced Error Handling
+## Quick Start
 
-Athena now features **revolutionary error handling** with precise location information and intelligent suggestions:
+```bash
+git clone https://github.com/Jeck0v/Athena
+cd athena
+cargo install --path .
 
-### Before (Cryptic Errors)
+athena build deploy.ath
 ```
-Error: Parse error: Expected athena_file rule
+
+## Usage
+
+```bash
+athena build deploy.ath                 # Generate docker-compose.yml
+athena build deploy.ath -o custom.yml   # Custom output file
+athena validate deploy.ath              # Validate syntax only
+athena info                             # Show DSL information
+athena info --examples                  # Show usage examples
+athena info --directives                # Show all directives
 ```
 
-### After (Enhanced Errors)
+If no file is specified, Athena looks for a `.ath` file in the current directory.
+
+## What Athena Handles
+
+- **Service type detection** - recognizes Database, Cache, WebApp and Proxy patterns from the image name
+- **Healthchecks** - generates appropriate healthchecks per service type with tuned intervals
+- **Restart policies** - `always` for databases and caches, `unless-stopped` for applications
+- **Network isolation** - automatic bridge network shared across services
+- **Dependency ordering** - services are sorted topologically in the output
+- **Dockerfile fallback** - no image specified means Athena looks for a Dockerfile
+- **Resource limits** - CPU and memory constraints via `RESOURCE-LIMITS`
+- **Metadata labels** - every service is tagged with project, type and generation date
+- **Docker Swarm** - replicas, update config and overlay networks when needed
+
+Everything Athena adds is visible in the generated output. No hidden behavior.
+
+## Error Handling
+
+Athena provides precise parser errors with line and column information, visual context and actionable suggestions.
+
 ```
 Error: Parse error at line 8, column 1: Missing 'END SERVICE' statement
    |
- 8 | # Missing END SERVICE for demonstration
+ 8 | # Missing END SERVICE
    | ^ Error here
 
 Suggestion: Each SERVICE block must be closed with 'END SERVICE'
 ```
 
-### Smart Validation with Suggestions
-```
-Error: Port conflict detected! Host port 8080 is used by multiple services: app1, app2
-Affected services: app1, app2
+Validation also catches port conflicts, invalid service references and circular dependencies before any file is generated.
 
-Suggestion: Use different host ports, e.g., 8080, 8081
-```
+See [Error Handling documentation](docs/ERROR_HANDLING.md) for the full reference.
 
-**[Learn more about Enhanced Error Handling →](docs/ERROR_HANDLING.md)**
+## DSL Reference
 
-## Quick Start
+| Directive | Example |
+|---|---|
+| `DEPLOYMENT-ID` | `DEPLOYMENT-ID my_project` |
+| `VERSION-ID` | `VERSION-ID 1.0.0` |
+| `NETWORK-NAME` | `NETWORK-NAME app_network` |
+| `IMAGE-ID` | `IMAGE-ID postgres:15` |
+| `PORT-MAPPING` | `PORT-MAPPING 8080 TO 80` |
+| `ENV-VARIABLE` | `ENV-VARIABLE {{DATABASE_URL}}` |
+| `COMMAND` | `COMMAND "npm start"` |
+| `VOLUME-MAPPING` | `VOLUME-MAPPING "./data" TO "/app/data"` |
+| `DEPENDS-ON` | `DEPENDS-ON database` |
+| `HEALTH-CHECK` | `HEALTH-CHECK "curl -f http://localhost/health"` |
+| `RESTART-POLICY` | `RESTART-POLICY always` |
+| `RESOURCE-LIMITS` | `RESOURCE-LIMITS CPU "0.5" MEMORY "512M"` |
+| `REPLICAS` | `REPLICAS 3` |
 
-### Installation
-```bash
-# Install from source
-git clone https://github.com/Jeck0v/Athena
-cd athena
-cargo install --path .
-
-# Verify installation
-athena --version
-```
-
-### Generate Docker Compose
-```bash
-# Create a simple deploy.ath file
-echo 'DEPLOYMENT-ID MY_APP
-
-SERVICES SECTION
-
-SERVICE backend
-PORT-MAPPING 8000 TO 8000
-ENV-VARIABLE {{DATABASE_URL}}
-END SERVICE
-
-SERVICE database
-IMAGE-ID postgres:15
-END SERVICE' > deploy.ath
-
-# Generate production-ready docker-compose.yml
-athena build deploy.ath
-```
-
-## Key Features
-
-### Enhanced Error Handling System (New!)
-- **Line & Column Precision** => Exact error locations with visual context
-- **Intelligent Suggestions** => Automatic recommendations for common fixes
-- **Advanced Validation** => Port conflicts, service references, circular dependencies
-- **Fail-Fast Processing** => Immediate feedback with no partial generation
-
-### Intelligent Defaults 2025+
-- Auto check for the Dockerfile
-- Auto-detects service types database, Cache, WebApp, Proxy patterns
-- Smart restart policies `always` for databases, `unless-stopped` for apps
-- Optimized health checks different intervals per service type
-- Container naming follows modern conventions (`project-service`)
-
-### Docker-First Approach
-- Dockerfile by default => No image? Just dont configure it and athena will check for your Dockerfile nativement
-- Intelligent networking => Auto-configured networks with proper isolation
-- Production-ready => Security, resource limits, and health monitoring
-- Standards compliant => Follows Docker Compose 2025 best practices
-
-### Performance Optimized
-- Topological sorting => Services ordered by dependencies automatically
-- Iterative validation => Fast circular dependency detection
-- Optimized parsing => **<1ms parse time, <2ms generation**
-- Memory efficient => Pre-allocated structures for large compositions
-
-### Syntax Highlighting (SOON)
-- **Beautiful DSL highlighting** for `.ath` files with customizable colors
-- **Zed editor extension** ready to install in `syntax-highlighting/`
-- **Smart color coding** for keywords, directives, template variables, and more
-- **Easy customization** via `colors.json` make it your own!
+Full syntax documentation: [DSL Reference](docs/DSL_REFERENCE.md)
 
 ## Documentation
 
-### Core Documentation
-- [Enhanced Error Handling (**New**)](docs/ERROR_HANDLING.md) - Complete guide to Athena's advanced error system.
-- [Syntax Highlighting (**New**)](syntax-highlighting/README.md) - Beautiful colors for `.ath` files in Zed editor.
-- [Installation Guide](docs/INSTALLATION.md)
-- [Docker Compose Generator Usage](docs/DSL_REFERENCE.md)
-- [Examples](docs/EXAMPLES.md)
+- [DSL Reference](docs/DSL_REFERENCE.md) - complete syntax and directives
+- [Error Handling](docs/ERROR_HANDLING.md) - error system and validation rules
+- [Architecture](docs/ARCHITECTURE.md) - project structure and design
+- [Features](docs/FEATURES.md) - detailed feature documentation
+- [Examples](docs/EXAMPLES.md) - example configurations
+- [Testing](docs/TESTING.md) - test suite and conventions
+- [Development](docs/DEVELOPMENT.md) - contributing and development workflow
+- [Installation](docs/INSTALLATION.md) - installation options
 
-### Development
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [Development Guide](docs/DEVELOPMENT.md)
-- [Testing Documentation](docs/TESTING.md)
+## Design Principles
 
-## Basic Usage
+Athena is opinionated but transparent. Everything it adds is explicit in the generated output.
 
-```bash
-athena build deploy.ath              # Generate docker-compose.yml
-athena build deploy.ath -o custom.yml   # Custom output file
-athena validate deploy.ath           # Validate syntax only
-athena info                          # Show DSL information
-athena info --examples               # Show usage examples
-athena info --directives             # Show all directives
-```
+Defaults are meant to be reasonable starting points, not final production guarantees. You are expected to review and adapt the output to your actual deployment constraints.
 
-## What Athena Adds Automatically
-
-- Smart service detection (Database, Cache, WebApp, Proxy)
-- Optimized health checks with service-specific intervals
-- Production restart policies based on service type
-- Modern container naming (`project-service`)
-- Metadata labels for tracking and management
-- Resource management with deploy sections
-- Network isolation with custom networks
-- Dockerfile integration when no image specified
-- Dependency ordering with topological sort
-
-## Acknowledgments
-
-- **Pest** for powerful parsing capabilities
-- **Clap** for excellent CLI framework
-- **Docker Community** for container standards
-- **Rust Community** for the amazing ecosystem
+Athena does not hide Docker. It reduces friction around it.
 
 ## License
 
-This project is licensed under the MIT License see the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
