@@ -250,7 +250,7 @@ fn test_build_args_complex_scenario() {
     let parsed = parse_yaml(&yaml_content);
     
     // Check project name and network
-    assert_eq!(parsed["name"], "BUILD_ARGS_COMPLEX");
+    assert_eq!(parsed["name"], "build-args-complex");
     
     let networks = parsed["networks"].as_mapping().unwrap();
     assert!(networks.contains_key(&Value::String("custom_network".to_string())));

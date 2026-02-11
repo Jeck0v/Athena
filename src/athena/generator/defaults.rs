@@ -1,41 +1,18 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
-use crate::athena::parser::ast::*;
+use crate::athena::parser::ast::{
+    EnvironmentVariable, FailureAction, PortMapping, Protocol, ResourceLimits, RestartPolicy,
+    Service, SwarmConfig, VolumeMapping,
+};
 
 /// Default Docker Compose configurations based on service patterns and Docker standards
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ServiceDefaults {
     pub restart_policy: RestartPolicy,
     pub health_check_interval: String,
     pub health_check_timeout: String,
     pub health_check_retries: u32,
     pub health_check_start_period: String,
-    #[allow(dead_code)]
-    pub network_mode: NetworkMode,
-    pub pull_policy: PullPolicy,
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub enum NetworkMode {
-    Bridge,
-    #[allow(dead_code)]
-    Host,
-    #[allow(dead_code)]
-    None,
-    #[allow(dead_code)]
-    Custom(String),
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub enum PullPolicy {
-    #[allow(dead_code)]
-    Always,
-    Missing,
-    #[allow(dead_code)]
-    Never,
 }
 
 impl Default for ServiceDefaults {
@@ -46,8 +23,6 @@ impl Default for ServiceDefaults {
             health_check_timeout: "10s".to_string(),
             health_check_retries: 3,
             health_check_start_period: "40s".to_string(),
-            network_mode: NetworkMode::Bridge,
-            pull_policy: PullPolicy::Missing,
         }
     }
 }
@@ -59,8 +34,6 @@ pub struct EnhancedDockerService {
     pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub container_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,9 +50,8 @@ pub struct EnhancedDockerService {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deploy: Option<EnhancedDeploy>,
     pub networks: Vec<String>,
-    pub pull_policy: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub labels: Option<HashMap<String, String>>,
+    pub labels: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,7 +83,7 @@ pub struct EnhancedDeploy {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_config: Option<SwarmUpdateConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub labels: Option<HashMap<String, String>>,
+    pub labels: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -207,8 +179,6 @@ impl DefaultsEngine {
                 health_check_timeout: "5s".to_string(),
                 health_check_retries: 5,
                 health_check_start_period: "60s".to_string(),
-                network_mode: NetworkMode::Bridge,
-                pull_policy: PullPolicy::Missing,
             },
             ServiceType::Cache => ServiceDefaults {
                 restart_policy: RestartPolicy::Always,
@@ -216,8 +186,6 @@ impl DefaultsEngine {
                 health_check_timeout: "3s".to_string(),
                 health_check_retries: 3,
                 health_check_start_period: "20s".to_string(),
-                network_mode: NetworkMode::Bridge,
-                pull_policy: PullPolicy::Missing,
             },
             ServiceType::Proxy => ServiceDefaults {
                 restart_policy: RestartPolicy::Always,
@@ -225,8 +193,6 @@ impl DefaultsEngine {
                 health_check_timeout: "5s".to_string(),
                 health_check_retries: 3,
                 health_check_start_period: "30s".to_string(),
-                network_mode: NetworkMode::Bridge,
-                pull_policy: PullPolicy::Missing,
             },
             ServiceType::WebApp => ServiceDefaults {
                 restart_policy: RestartPolicy::UnlessStopped,
@@ -234,8 +200,6 @@ impl DefaultsEngine {
                 health_check_timeout: "10s".to_string(),
                 health_check_retries: 3,
                 health_check_start_period: "40s".to_string(),
-                network_mode: NetworkMode::Bridge,
-                pull_policy: PullPolicy::Missing,
             },
             ServiceType::Generic => ServiceDefaults::default(),
         }
@@ -251,7 +215,7 @@ impl DefaultsEngine {
         let defaults = Self::get_defaults_for_type(service_type);
         
         let build_config = Self::create_build_config(service, project_name);
-        let mut enhanced_service = EnhancedDockerService {
+        let enhanced_service = EnhancedDockerService {
             // If we have build config with args, don't use image (build takes precedence)
             image: if build_config.is_some() && service.build_args.is_some() { 
                 None 
@@ -259,7 +223,6 @@ impl DefaultsEngine {
                 service.image.clone() 
             },
             build: build_config,
-            container_name: Some(format!("{}_{}", project_name, service.name)),
             ports: Self::convert_ports(&service.ports),
             environment: Self::convert_environment(&service.environment),
             command: service.command.clone(),
@@ -269,19 +232,13 @@ impl DefaultsEngine {
             } else { 
                 Some(service.depends_on.clone()) 
             },
-            healthcheck: Self::convert_healthcheck(&service.health_check, &defaults),
+            healthcheck: Self::convert_healthcheck(&service.health_check, &defaults, service_type, &service.ports),
             restart: Self::convert_restart_policy(&service.restart, &defaults),
             deploy: Self::convert_deploy(&service.resources, &service.swarm_config),
             networks: vec![network_name.to_string()],
-            pull_policy: Self::convert_pull_policy(&defaults.pull_policy),
             labels: Some(Self::generate_labels(project_name, &service.name, service_type)),
         };
-        
-        // Optimize container name for readability
-        enhanced_service.container_name = Some(
-            format!("{}-{}", project_name.to_lowercase().replace("_", "-"), service.name)
-        );
-        
+
         enhanced_service
     }
     
@@ -324,7 +281,7 @@ impl DefaultsEngine {
         for env_var in env_vars {
             match env_var {
                 EnvironmentVariable::Template(var_name) => {
-                    env_list.push(format!("{}=${{{}}}", var_name, var_name));
+                    env_list.push(format!("{var_name}=${{{var_name}}}"));
                 }
                 EnvironmentVariable::Literal(value) => {
                     // If it's already in KEY=VALUE format, use as-is
@@ -332,7 +289,7 @@ impl DefaultsEngine {
                     if value.contains('=') {
                         env_list.push(value.clone());
                     } else {
-                        env_list.push(format!("VALUE={}", value));
+                        env_list.push(format!("VALUE={value}"));
                     }
                 }
             }
@@ -362,11 +319,48 @@ impl DefaultsEngine {
     }
     
     fn convert_healthcheck(
-        health_check: &Option<String>, 
-        defaults: &ServiceDefaults
+        health_check: &Option<String>,
+        defaults: &ServiceDefaults,
+        service_type: ServiceType,
+        ports: &[PortMapping],
     ) -> Option<EnhancedHealthCheck> {
-        health_check.as_ref().map(|cmd| EnhancedHealthCheck {
-            test: vec!["CMD-SHELL".to_string(), cmd.clone()],
+        // If the user specified a healthcheck, use it directly
+        if let Some(cmd) = health_check {
+            return Some(EnhancedHealthCheck {
+                test: vec!["CMD-SHELL".to_string(), cmd.clone()],
+                interval: defaults.health_check_interval.clone(),
+                timeout: defaults.health_check_timeout.clone(),
+                retries: defaults.health_check_retries,
+                start_period: defaults.health_check_start_period.clone(),
+            });
+        }
+
+        // Otherwise, generate an automatic healthcheck based on service type
+        let auto_cmd = match service_type {
+            ServiceType::Database => Some("pg_isready -U postgres || mysqladmin ping -h localhost || mongosh --eval 'db.runCommand(\"ping\")' --quiet".to_string()),
+            ServiceType::Cache => Some("redis-cli ping || echo 'STATS' | nc localhost 11211".to_string()),
+            ServiceType::Proxy => {
+                let port = ports.first().map_or(80, |p| p.container_port);
+                Some(format!("curl -f http://localhost:{port}/ || exit 1"))
+            }
+            ServiceType::WebApp => {
+                if let Some(first_port) = ports.first() {
+                    Some(format!("curl -f http://localhost:{}/ || exit 1", first_port.container_port))
+                } else {
+                    None
+                }
+            }
+            ServiceType::Generic => {
+                if let Some(first_port) = ports.first() {
+                    Some(format!("curl -f http://localhost:{}/ || exit 1", first_port.container_port))
+                } else {
+                    None
+                }
+            }
+        };
+
+        auto_cmd.map(|cmd| EnhancedHealthCheck {
+            test: vec!["CMD-SHELL".to_string(), cmd],
             interval: defaults.health_check_interval.clone(),
             timeout: defaults.health_check_timeout.clone(),
             retries: defaults.health_check_retries,
@@ -402,12 +396,22 @@ impl DefaultsEngine {
             reservations: None,
         });
 
-        let restart_policy = Some(EnhancedRestartPolicy {
-            condition: "on-failure".to_string(),
-            delay: "5s".to_string(),
-            max_attempts: 3,
-            window: "120s".to_string(),
+        // Only add deploy.restart_policy when Swarm features are active.
+        // In plain Compose mode, the top-level `restart:` field is sufficient.
+        let has_swarm = swarm_config.as_ref().is_some_and(|s| {
+            s.replicas.is_some() || s.update_config.is_some() || s.labels.is_some()
         });
+
+        let restart_policy = if has_swarm {
+            Some(EnhancedRestartPolicy {
+                condition: "on-failure".to_string(),
+                delay: "5s".to_string(),
+                max_attempts: 3,
+                window: "120s".to_string(),
+            })
+        } else {
+            None
+        };
 
         let mut enhanced_deploy = EnhancedDeploy {
             resources: enhanced_resources,
@@ -420,7 +424,7 @@ impl DefaultsEngine {
         // Add Swarm-specific configurations
         if let Some(swarm) = swarm_config {
             enhanced_deploy.replicas = swarm.replicas;
-            enhanced_deploy.labels = swarm.labels.clone();
+            enhanced_deploy.labels = swarm.labels.as_ref().map(|l| l.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
             
             if let Some(update_config) = &swarm.update_config {
                 enhanced_deploy.update_config = Some(SwarmUpdateConfig {
@@ -442,19 +446,12 @@ impl DefaultsEngine {
         Some(enhanced_deploy)
     }
     
-    fn convert_pull_policy(pull_policy: &PullPolicy) -> String {
-        match pull_policy {
-            PullPolicy::Always => "always".to_string(),
-            PullPolicy::Missing => "missing".to_string(),
-            PullPolicy::Never => "never".to_string(),
-        }
-    }
-    
-    fn generate_labels(project_name: &str, service_name: &str, service_type: ServiceType) -> HashMap<String, String> {
-        let mut labels = HashMap::new();
+
+    fn generate_labels(project_name: &str, service_name: &str, service_type: ServiceType) -> BTreeMap<String, String> {
+        let mut labels = BTreeMap::new();
         labels.insert("athena.project".to_string(), project_name.to_string());
         labels.insert("athena.service".to_string(), service_name.to_string());
-        labels.insert("athena.type".to_string(), format!("{:?}", service_type).to_lowercase());
+        labels.insert("athena.type".to_string(), format!("{service_type:?}").to_lowercase());
         labels.insert("athena.generated".to_string(), chrono::Utc::now().format("%Y-%m-%d").to_string());
         labels
     }
