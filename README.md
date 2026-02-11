@@ -1,4 +1,4 @@
-# Athena -- Declarative DevOps Toolkit
+# Athena - Declarative DevOps Toolkit
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
