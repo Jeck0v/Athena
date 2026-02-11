@@ -162,13 +162,6 @@ impl AthenaFile {
             .unwrap_or_else(|| format!("{}_network", self.get_project_name().to_lowercase()))
     }
 
-    #[allow(dead_code)]
-    pub fn get_networks(&self) -> Vec<&NetworkDefinition> {
-        self.environment
-            .as_ref()
-            .map(|e| e.networks.iter().collect())
-            .unwrap_or_default()
-    }
 }
 
 impl Service {
@@ -224,15 +217,3 @@ impl UpdateConfig {
     }
 }
 
-impl NetworkDefinition {
-    #[allow(dead_code)]
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            driver: None,
-            attachable: None,
-            encrypted: None,
-            ingress: None,
-        }
-    }
-}

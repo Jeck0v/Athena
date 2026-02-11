@@ -1,50 +1,24 @@
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::fmt::Write;
 
 use super::defaults::{DefaultsEngine, EnhancedDockerService};
 use crate::athena::dockerfile::{analyze_dockerfile, validate_build_args_against_dockerfile};
 use crate::athena::error::{
-    AthenaError, AthenaResult, EnhancedValidationError, ValidationErrorType,
+    AthenaError, AthenaResult, EnhancedValidationError,
 };
-use crate::athena::parser::ast::*;
+use crate::athena::parser::ast::{AthenaFile, NetworkDriver, VolumeDefinition};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DockerCompose {
-    services: HashMap<String, EnhancedDockerService>,
+    services: IndexMap<String, EnhancedDockerService>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    networks: Option<HashMap<String, DockerNetwork>>,
+    networks: Option<BTreeMap<String, DockerNetwork>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    volumes: Option<HashMap<String, DockerVolume>>,
+    volumes: Option<BTreeMap<String, DockerVolume>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
-}
-
-// Legacy DockerService - kept for backward compatibility
-// Use EnhancedDockerService for new implementations
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DockerHealthCheck {
-    test: Vec<String>,
-    interval: String,
-    timeout: String,
-    retries: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DockerDeploy {
-    resources: Option<DockerResources>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DockerResources {
-    limits: Option<ResourceSpec>,
-    reservations: Option<ResourceSpec>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ResourceSpec {
-    cpus: Option<String>,
-    memory: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,8 +43,8 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     let network_name = athena_file.get_network_name();
 
     let mut compose = DockerCompose {
-        name: Some(project_name.clone()),
-        services: HashMap::new(),
+        name: Some(project_name.to_lowercase().replace('_', "-")),
+        services: IndexMap::new(),
         networks: None,
         volumes: None,
     };
@@ -85,8 +59,11 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
         }
     }
 
-    // Convert services using intelligent defaults
-    for service in &athena_file.services.services {
+    // Sort services in dependency order (no-deps first, then dependents)
+    let sorted_services = topological_sort_services(&athena_file.services.services);
+
+    // Convert services using intelligent defaults, inserting in topological order
+    for service in &sorted_services {
         let enhanced_service =
             DefaultsEngine::create_enhanced_service(service, &network_name, &project_name);
         compose
@@ -106,9 +83,87 @@ pub fn generate_docker_compose(athena_file: &AthenaFile) -> AthenaResult<String>
     Ok(add_enhanced_yaml_comments(formatted_yaml, athena_file))
 }
 
+/// Sort services in topological order: services with no dependencies first,
+/// then services that depend on them, etc. Falls back to original order on cycles.
+fn topological_sort_services(services: &[crate::athena::parser::ast::Service]) -> Vec<&crate::athena::parser::ast::Service> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    let name_to_service: HashMap<&str, &crate::athena::parser::ast::Service> =
+        services.iter().map(|s| (s.name.as_str(), s)).collect();
+
+    // Build in-degree map
+    let mut in_degree: HashMap<&str, usize> = HashMap::new();
+    let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
+
+    for service in services {
+        in_degree.entry(service.name.as_str()).or_insert(0);
+        dependents.entry(service.name.as_str()).or_default();
+        for dep in &service.depends_on {
+            if name_to_service.contains_key(dep.as_str()) {
+                dependents.entry(dep.as_str()).or_default().push(&service.name);
+                *in_degree.entry(service.name.as_str()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Kahn's algorithm
+    let mut queue: VecDeque<&str> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(&name, _)| name)
+        .collect();
+
+    // Sort the initial queue for determinism among peers
+    let mut queue_vec: Vec<&str> = queue.drain(..).collect();
+    queue_vec.sort();
+    queue = queue_vec.into_iter().collect();
+
+    let mut sorted: Vec<&crate::athena::parser::ast::Service> = Vec::with_capacity(services.len());
+    let mut visited = HashSet::new();
+
+    while let Some(current) = queue.pop_front() {
+        if visited.contains(current) {
+            continue;
+        }
+        visited.insert(current);
+
+        if let Some(&service) = name_to_service.get(current) {
+            sorted.push(service);
+        }
+
+        // Collect and sort neighbors for deterministic order among peers
+        let mut neighbors: Vec<&str> = dependents
+            .get(current)
+            .map(|v| v.as_slice())
+            .unwrap_or_default()
+            .to_vec();
+        neighbors.sort();
+
+        for neighbor in neighbors {
+            if let Some(deg) = in_degree.get_mut(neighbor) {
+                *deg = deg.saturating_sub(1);
+                if *deg == 0 {
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    // Fallback: if cycle detected, append remaining services in original order
+    if sorted.len() < services.len() {
+        for service in services {
+            if !visited.contains(service.name.as_str()) {
+                sorted.push(service);
+            }
+        }
+    }
+
+    sorted
+}
+
 /// Create optimized network configuration with Docker Swarm support
-fn create_optimized_networks(athena_file: &AthenaFile) -> HashMap<String, DockerNetwork> {
-    let mut networks = HashMap::new();
+fn create_optimized_networks(athena_file: &AthenaFile) -> BTreeMap<String, DockerNetwork> {
+    let mut networks = BTreeMap::new();
     
     if let Some(env) = &athena_file.environment {
         // Use networks defined in environment section
@@ -151,8 +206,8 @@ fn create_optimized_networks(athena_file: &AthenaFile) -> HashMap<String, Docker
 }
 
 /// Create optimized volume configuration
-fn create_optimized_volumes(volume_defs: &[VolumeDefinition]) -> HashMap<String, DockerVolume> {
-    let mut volumes = HashMap::new();
+fn create_optimized_volumes(volume_defs: &[VolumeDefinition]) -> BTreeMap<String, DockerVolume> {
+    let mut volumes = BTreeMap::new();
     for vol_def in volume_defs {
         volumes.insert(
             vol_def.name.clone(),
@@ -179,8 +234,7 @@ fn validate_compose_enhanced(
         if service.image.is_none() && service.build.is_none() {
             return Err(AthenaError::validation_error_enhanced(
                 EnhancedValidationError::new(
-                    format!("Service '{}' is missing both image and build configuration", service_name),
-                    ValidationErrorType::MissingConfiguration
+                    format!("Service '{service_name}' is missing both image and build configuration"),
                 )
                 .with_suggestion("Add IMAGE-ID \"image:tag\" or ensure a Dockerfile exists in the current directory".to_string())
                 .with_services(vec![service_name.clone()])
@@ -205,8 +259,7 @@ fn validate_compose_enhanced(
                 if !is_valid_port_mapping(port_mapping) {
                     return Err(AthenaError::validation_error_enhanced(
                         EnhancedValidationError::new(
-                            format!("Service '{}' has invalid port mapping: {}", service_name, port_mapping),
-                            ValidationErrorType::InvalidFormat
+                            format!("Service '{service_name}' has invalid port mapping: {port_mapping}"),
                         )
                         .with_suggestion("Use format: PORT-MAPPING <host_port> TO <container_port>, e.g., PORT-MAPPING 8080 TO 80".to_string())
                         .with_services(vec![service_name.clone()])
@@ -350,7 +403,6 @@ fn detect_port_conflicts(compose: &DockerCompose) -> AthenaResult<()> {
                     port,
                     services.join(", ")
                 ),
-                ValidationErrorType::PortConflict,
             )
             .with_suggestion(suggestion)
             .with_services(services);
@@ -385,53 +437,32 @@ fn generate_port_suggestions(base_port: &str, count: usize) -> String {
     }
 }
 
-/// Validate BUILD-ARGS against Dockerfile ARGs (intelligent validation)
+/// Validate BUILD-ARGS against Dockerfile ARGs (intelligent validation).
 fn validate_dockerfile_build_args(athena_file: &AthenaFile) -> AthenaResult<()> {
-    // Check each service that has build_args
     for service in &athena_file.services.services {
         if let Some(build_args) = &service.build_args {
-            // Try to find and analyze the Dockerfile
-            let dockerfile_path = "Dockerfile"; // Default path
+            let dockerfile_path = "Dockerfile";
 
-            match analyze_dockerfile(dockerfile_path) {
-                Ok(dockerfile_analysis) => {
-                    // Validate BUILD-ARGS against Dockerfile ARGs
-                    match validate_build_args_against_dockerfile(build_args, &dockerfile_analysis) {
-                        Ok(warnings) => {
-                            // For now, we treat warnings as validation errors
-                            // In the future, we could make this configurable
-                            if !warnings.is_empty() {
-                                let combined_warning = warnings.join("\n\n");
-                                return Err(AthenaError::validation_error_enhanced(
-                                    EnhancedValidationError::new(
-                                        format!(
-                                            "BUILD-ARGS validation failed for service '{}':\n\n{}",
-                                            service.name, combined_warning
-                                        ),
-                                        ValidationErrorType::InvalidFormat,
-                                    )
-                                    .with_suggestion(
-                                        "Ensure all BUILD-ARGS correspond to ARG declarations in your Dockerfile".to_string()
-                                    )
-                                    .with_services(vec![service.name.clone()])
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            // Validation process failed, but we don't want to block builds
-                            eprintln!(
-                                "Warning: Could not validate BUILD-ARGS for service '{}': {}",
-                                service.name, e
-                            );
-                        }
-                    }
-                }
-                Err(_) => {
-                    // Dockerfile not found or not readable
-                    // This is OK - just skip validation for this service
-                    // We could add a warning here in verbose mode
-                    continue;
-                }
+            let dockerfile_analysis = match analyze_dockerfile(dockerfile_path) {
+                Ok(analysis) => analysis,
+                Err(_) => continue,
+            };
+
+            let warnings = validate_build_args_against_dockerfile(build_args, &dockerfile_analysis);
+
+            if !warnings.is_empty() {
+                let combined_warning = warnings.join("\n\n");
+                return Err(AthenaError::validation_error_enhanced(
+                    EnhancedValidationError::new(format!(
+                        "BUILD-ARGS validation failed for service '{}':\n\n{combined_warning}",
+                        service.name
+                    ))
+                    .with_suggestion(
+                        "Ensure all BUILD-ARGS correspond to ARG declarations in your Dockerfile"
+                            .to_string(),
+                    )
+                    .with_services(vec![service.name.clone()]),
+                ));
             }
         }
     }
@@ -481,37 +512,38 @@ fn improve_yaml_formatting(yaml: String) -> String {
 
 /// Add enhanced YAML comments with metadata and optimization notes
 fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String {
-    let mut result = String::with_capacity(yaml.len() + 500); // Pre-allocate for better performance
+    let mut result = String::with_capacity(yaml.len() + 500);
 
-    // Enhanced header with metadata
-    result.push_str(&format!(
-        "# Generated by Athena v{} from {} deployment\n",
+    let _ = writeln!(
+        result,
+        "# Generated by Athena v{} from {} deployment",
         env!("CARGO_PKG_VERSION"),
         athena_file.get_project_name()
-    ));
-    result.push_str("# Developed by UNFAIR Team: https://github.com/Jeck0v/Athena \n");
+    );
+    let _ = writeln!(result, "# Developed by UNFAIR Team: https://github.com/Jeck0v/Athena");
 
     if let Some(deployment) = &athena_file.deployment {
         if let Some(version) = &deployment.version_id {
-            result.push_str(&format!("# Project Version: {}\n", version));
+            let _ = writeln!(result, "# Project Version: {version}");
         }
     }
 
-    result.push_str(&format!(
-        "# Generated: {}\n",
+    let _ = writeln!(
+        result,
+        "# Generated: {}",
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
-    ));
-
-    result.push_str(
-        "# Features: Intelligent defaults, optimized networking, enhanced health checks\n\n",
     );
 
-    // Add service count and optimization info
+    let _ = writeln!(
+        result,
+        "# Features: Intelligent defaults, optimized networking, enhanced health checks\n"
+    );
+
     let service_count = athena_file.services.services.len();
-    result.push_str(&format!(
-        "# Services: {} configured with intelligent defaults\n\n",
-        service_count
-    ));
+    let _ = writeln!(
+        result,
+        "# Services: {service_count} configured with intelligent defaults\n"
+    );
 
     result.push_str(&yaml);
 
@@ -521,6 +553,7 @@ fn add_enhanced_yaml_comments(yaml: String, athena_file: &AthenaFile) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::athena::parser::ast::{DeploymentSection, PortMapping, Protocol, Service};
 
     #[test]
     fn test_enhanced_compose_generation() {
@@ -549,7 +582,7 @@ mod tests {
         assert!(yaml.contains("image: python:3.11-slim"));
         assert!(yaml.contains("8000:8000"));
         assert!(yaml.contains("restart: unless-stopped"));
-        assert!(yaml.contains("container_name: test-project-backend"));
+        assert!(!yaml.contains("container_name:"));
     }
 
     #[test]

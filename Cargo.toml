@@ -24,17 +24,13 @@ pest_derive = "2.7"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+indexmap = { version = "2.2", features = ["serde"] }
 
 # Error handling
-anyhow = "1.0"
 thiserror = "1.0"
 
 # Utilities
-uuid = { version = "1.5", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-
-# Template and file operations (for boilerplate generation)
-tempfile = "3.8"
 
 [dev-dependencies]
 # Testing

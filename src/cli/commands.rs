@@ -11,7 +11,7 @@ pub fn execute_command(command: Option<Commands>, verbose: bool) -> AthenaResult
             if verbose {
                 println!("Magic mode: Auto-detecting and building...");
             }
-            execute_build(None, None, false, true) // verbose=true by default in magic mode
+            execute_build(None, None, false, true)
         }
         Some(Commands::Build {
             input,
@@ -19,7 +19,7 @@ pub fn execute_command(command: Option<Commands>, verbose: bool) -> AthenaResult
             validate_only,
             quiet,
         }) => {
-            let verbose = should_be_verbose(verbose, quiet);
+            let verbose = should_be_verbose(quiet);
             execute_build(input, output, validate_only, verbose)
         }
 
@@ -28,7 +28,10 @@ pub fn execute_command(command: Option<Commands>, verbose: bool) -> AthenaResult
         Some(Commands::Info {
             examples,
             directives,
-        }) => execute_info(examples, directives),
+        }) => {
+            execute_info(examples, directives);
+            Ok(())
+        }
     }
 }
 
@@ -38,16 +41,13 @@ fn execute_build(
     validate_only: bool,
     verbose: bool,
 ) -> AthenaResult<()> {
-    // Auto-detection of the .ath file
     let input = auto_detect_ath_file(input)?;
     if verbose {
         println!("Reading Athena file: {}", input.display());
     }
 
-    // Read and parse the input file
     let content = fs::read_to_string(&input).map_err(AthenaError::IoError)?;
 
-    // Automatic validation (always done)
     if verbose {
         println!("Validating syntax...");
     }
@@ -66,25 +66,22 @@ fn execute_build(
         return Ok(());
     }
 
-    // Generate docker-compose.yml (includes validation)
     let compose_yaml = generate_docker_compose(&athena_file)?;
 
-    // Determine output file
     let output_path = output.unwrap_or_else(|| "docker-compose.yml".into());
 
-    // Write output
     fs::write(&output_path, &compose_yaml).map_err(AthenaError::IoError)?;
 
-    println!(
-        "Generated docker-compose.yml at: {}",
-        output_path.display()
-    );
+    println!("Generated docker-compose.yml at: {}", output_path.display());
 
     if verbose {
         println!("Project details:");
-        println!("   • Project name: {}", athena_file.get_project_name());
-        println!("   • Network name: {}", athena_file.get_network_name());
-        println!("   • Services: {}", athena_file.services.services.len());
+        println!("   - Project name: {}", athena_file.get_project_name());
+        println!("   - Network name: {}", athena_file.get_network_name());
+        println!(
+            "   - Services: {}",
+            athena_file.services.services.len()
+        );
 
         for service in &athena_file.services.services {
             println!(
@@ -98,9 +95,7 @@ fn execute_build(
     Ok(())
 }
 
-
 fn execute_validate(input: Option<std::path::PathBuf>, verbose: bool) -> AthenaResult<()> {
-    // Auto-detection of the .ath file
     let input = auto_detect_ath_file(input)?;
     if verbose {
         println!("Validating Athena file: {}", input.display());
@@ -110,7 +105,7 @@ fn execute_validate(input: Option<std::path::PathBuf>, verbose: bool) -> AthenaR
 
     let athena_file = parse_athena_file(&content)?;
 
-    println!("✓ Athena file is valid");
+    println!("Athena file is valid");
 
     if verbose {
         println!("Project name: {}", athena_file.get_project_name());
@@ -128,7 +123,7 @@ fn execute_validate(input: Option<std::path::PathBuf>, verbose: bool) -> AthenaR
     Ok(())
 }
 
-fn execute_info(examples: bool, directives: bool) -> AthenaResult<()> {
+fn execute_info(examples: bool, directives: bool) {
     if examples {
         show_examples();
     } else if directives {
@@ -136,8 +131,6 @@ fn execute_info(examples: bool, directives: bool) -> AthenaResult<()> {
     } else {
         show_general_info();
     }
-
-    Ok(())
 }
 
 fn show_general_info() {

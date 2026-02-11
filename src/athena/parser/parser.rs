@@ -3,7 +3,11 @@ use pest_derive::Parser;
 use std::collections::HashMap;
 
 use crate::athena::error::{AthenaError, AthenaResult, EnhancedParseError};
-use super::ast::*;
+use super::ast::{
+    AthenaFile, DeploymentSection, EnvironmentSection, EnvironmentVariable, FailureAction,
+    NetworkDefinition, NetworkDriver, PortMapping, Protocol, ResourceLimits, RestartPolicy,
+    Service, ServicesSection, SwarmConfig, UpdateConfig, VolumeDefinition, VolumeMapping,
+};
 
 #[derive(Parser)]
 #[grammar = "athena/parser/grammar.pest"]
@@ -311,7 +315,7 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
                             } else if replicas_str.len() > 10 {
                                 "Replicas number is too large. Use a reasonable value like: 1, 2, 3, 5, 10, etc.".to_string()
                             } else {
-                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 5, 10, etc.", replicas_str)
+                                format!("'{replicas_str}' is not a valid number. Use a positive integer like: 1, 2, 3, 5, 10, etc.")
                             };
                             
                             AthenaError::ParseError(
@@ -321,10 +325,8 @@ fn parse_service_item(pair: pest::iterators::Pair<Rule>, service: &mut Service) 
                             )
                         })?;
                     
-                    if service.swarm_config.is_none() {
-                        service.swarm_config = Some(SwarmConfig::new());
-                    }
-                    service.swarm_config.as_mut().unwrap().replicas = Some(replicas);
+                    service.swarm_config.get_or_insert_with(SwarmConfig::new)
+                        .replicas = Some(replicas);
                 }
             }
             Rule::swarm_update_config => {
@@ -435,7 +437,7 @@ fn parse_restart_policy(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Resta
         "unless-stopped" => Ok(RestartPolicy::UnlessStopped),
         "on-failure" => Ok(RestartPolicy::OnFailure),
         "no" => Ok(RestartPolicy::No),
-        _ => Err(AthenaError::ParseError(EnhancedParseError::new(format!("Invalid restart policy: {}", policy_str))))
+        _ => Err(AthenaError::ParseError(EnhancedParseError::new(format!("Invalid restart policy: {policy_str}"))))
     }
 }
 
@@ -501,7 +503,7 @@ fn parse_update_config(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Update
                             let suggestion = if parallelism_str.parse::<i32>().is_ok() && parallelism_str.starts_with('-') {
                                 "Parallelism must be a positive number. Use a value like: 1, 2, 3, 4, etc.".to_string()
                             } else {
-                                format!("'{}' is not a valid number. Use a positive integer like: 1, 2, 3, 4, etc.", parallelism_str)
+                                format!("'{parallelism_str}' is not a valid number. Use a positive integer like: 1, 2, 3, 4, etc.")
                             };
                             
                             AthenaError::ParseError(
@@ -522,7 +524,7 @@ fn parse_update_config(pair: pest::iterators::Pair<Rule>) -> AthenaResult<Update
                         "ROLLBACK" => FailureAction::Rollback,
                         _ => {
                             return Err(AthenaError::ParseError(
-                                EnhancedParseError::new(format!("Invalid failure action: {}", action_str))
+                                EnhancedParseError::new(format!("Invalid failure action: {action_str}"))
                                     .with_location(line, column)
                                     .with_suggestion("Valid failure actions are: CONTINUE, PAUSE, ROLLBACK".to_string())
                             ));
@@ -571,9 +573,9 @@ fn parse_swarm_labels(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap
                 .ok_or_else(|| {
                     let (key_line, key_column) = key_pair.line_col();
                     AthenaError::ParseError(
-                        EnhancedParseError::new(format!("Missing value for label key '{}'", key))
+                        EnhancedParseError::new(format!("Missing value for label key '{key}'"))
                             .with_location(key_line, key_column)
-                            .with_suggestion(format!("Complete the label: {}=\"value\", e.g., {}=\"production\"", key, key))
+                            .with_suggestion(format!("Complete the label: {key}=\"value\", e.g., {key}=\"production\""))
                     )
                 })?;
             let value = value_pair.as_str();
@@ -594,11 +596,11 @@ fn parse_swarm_labels(pair: pest::iterators::Pair<Rule>) -> AthenaResult<HashMap
 }
 
 fn clean_string_value(input: &str) -> String {
-    if input.starts_with('"') && input.ends_with('"') {
-        input[1..input.len()-1].to_string()
-    } else {
-        input.to_string()
-    }
+    input
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(input)
+        .to_string()
 }
 
 fn create_enhanced_parse_error(
@@ -607,7 +609,7 @@ fn create_enhanced_parse_error(
     column: usize,
     file_content: &str,
 ) -> EnhancedParseError {
-    let base_message = format!("{}", pest_error);
+    let base_message = format!("{pest_error}");
     
     // Extract meaningful error message from Pest error
     let (clean_message, suggestion) = match &pest_error.variant {
